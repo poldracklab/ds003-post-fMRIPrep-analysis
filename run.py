@@ -36,9 +36,9 @@ def get_parser():
 
     # Options that affect how pyBIDS is configured
     g_bids = parser.add_argument_group('Options for filtering BIDS queries')
-    g_bids.add_argument('--task', action='store',
+    g_bids.add_argument('--task', action='store', type=str, nargs='*',
                         help='select a specific task to be processed')
-    g_bids.add_argument('--run', action='store', type=int,
+    g_bids.add_argument('--run', action='store', type=int, nargs='*',
                         help='select a specific run identifier to be processed')
     g_bids.add_argument('--space', action='store', choices=get_tpl_list() + ['T1w', 'template'],
                         help='select a specific space to be processed')
@@ -107,9 +107,9 @@ def main():
     query = {'domains': 'derivatives', 'return_type': 'file', 'desc': 'preproc',
              'suffix': 'bold', 'extensions': ['.nii', '.nii.gz']}
     if opts.run:
-        query['run'] = opts.run
+        query['run'] = '|'.join(opts.run)
     if opts.task:
-        query['task'] = opts.task
+        query['task'] = '|'.join(opts.task)
     if opts.space:
         query['space'] = opts.space
         if opts.space == 'template':
