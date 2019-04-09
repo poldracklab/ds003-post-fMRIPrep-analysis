@@ -89,6 +89,10 @@ WORKDIR /src/
 COPY requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Replace FSL's imglob (which is Python 2)
+RUN rm -f /usr/share/fsl/5.0/bin/imglob && \
+    chmod a+rx $( python -c 'import site; print(site.getsitepackages()[0])' )/nipype/external/fsl_imglob.py && \
+    ln -s $( python -c 'import site; print(site.getsitepackages()[0])' )/nipype/external/fsl_imglob.py /usr/share/fsl/5.0/bin/imglob
 # Installing this module
 COPY . /src/
 ENV PYTHONPATH="/src:$PYTHONPATH"
