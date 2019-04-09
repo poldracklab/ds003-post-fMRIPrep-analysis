@@ -121,6 +121,10 @@ def main():
         print('No preprocessed files found under the given derivatives '
               'folder "%s".' % derivatives_dir, file=sys.stderr)
 
+    output_dir = opts.output_dir.resolve()
+    output_dir.mkdir(existok=True, parents=True)
+    logger.info('Writting output to "%s".', output_dir)
+
     # The magic happens here
     if 'participant' in opts.analysis_level:
         from workflows import first_level_wf
@@ -151,7 +155,7 @@ def main():
                 **subquery)[0])
             tr.append(part.metadata.get('RepetitionTime'))
 
-        workflow = first_level_wf()
+        workflow = first_level_wf(output_dir)
         workflow.inputs.inputnode.in_file = in_files[0]
         workflow.inputs.inputnode.in_mask = in_mask[0]
         workflow.inputs.inputnode.regressors = regr_files[0]

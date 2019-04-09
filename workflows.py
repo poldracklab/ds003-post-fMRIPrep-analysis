@@ -4,11 +4,16 @@ Analysis workflows
 
 from nipype.pipeline import engine as pe
 from nipype.algorithms.modelgen import SpecifyModel
-from nipype.interfaces import fsl, utility as niu
+from nipype.interfaces import fsl, utility as niu, io as nio
 from nipype.workflows.fmri.fsl.preprocess import create_susan_smooth
+from niworkflows.interfaces.bids import DerivativesDataSink as BIDSDerivatives
 
 
-def first_level_wf(fwhm=6.0, name='wf_1st_level'):
+class DerivativesDataSink(BIDSDerivatives):
+    out_path_base = 'FSLAnalysis'
+
+
+def first_level_wf(output_dir, fwhm=6.0, name='wf_1st_level'):
     workflow = pe.Workflow(name=name)
 
     inputnode = pe.Node(niu.IdentityInterface(
@@ -48,6 +53,30 @@ def first_level_wf(fwhm=6.0, name='wf_1st_level'):
     # feat_fit actually runs FEAT
     feat_fit = pe.Node(fsl.FEAT(), name='feat_fit')
 
+    feat_select = pe.Node(nio.SelectFiles({
+        'cope': 'cope1.nii.gz',
+        'pe': 'pe[0-9][0-9].nii.gz',
+        'tstat': 'tstat1.nii.gz',
+        'varcope': 'varcope1.nii.gz',
+        'zstat': 'zstat1.nii.gz',
+    }), name='feat_select')
+
+    ds_cope = pe.Node(DerivativesDataSink(
+        base_directory=output_dir, keep_dtype=False, stat='cope', suffix='statmap',
+        cont='intask'), name='ds_cope', run_without_submitting=True)
+
+    ds_varcope = pe.Node(DerivativesDataSink(
+        base_directory=output_dir, keep_dtype=False, stat='varcope', suffix='statmap',
+        cont='intask'), name='ds_varcope', run_without_submitting=True)
+
+    ds_zstat = pe.Node(DerivativesDataSink(
+        base_directory=output_dir, keep_dtype=False, stat='z', suffix='statmap',
+        cont='intask'), name='ds_zstat', run_without_submitting=True)
+
+    ds_tstat = pe.Node(DerivativesDataSink(
+        base_directory=output_dir, keep_dtype=False, stat='t', suffix='statmap',
+        cont='intask'), name='ds_tstat', run_without_submitting=True)
+
     workflow.connect([
         (inputnode, susan, [('in_file', 'inputnode.in_files'),
                             ('in_mask', 'inputnode.mask_file')]),
@@ -57,6 +86,10 @@ def first_level_wf(fwhm=6.0, name='wf_1st_level'):
         (susan, l1_spec, [('outputnode.smoothed_files', 'functional_runs')]),
         (inputnode, l1_spec, [('repetition_time', 'time_repetition')]),
         (inputnode, l1_model, [('repetition_time', 'interscan_interval')]),
+        (inputnode, ds_cope, [('repetition_time', 'source_file')]),
+        (inputnode, ds_varcope, [('repetition_time', 'source_file')]),
+        (inputnode, ds_zstat, [('repetition_time', 'source_file')]),
+        (inputnode, ds_tstat, [('repetition_time', 'source_file')]),
         (susan, runinfo, [('outputnode.smoothed_files', 'in_file')]),
         (runinfo, l1_spec, [
             ('info', 'subject_info'),
@@ -66,6 +99,11 @@ def first_level_wf(fwhm=6.0, name='wf_1st_level'):
             ('fsf_files', 'fsf_file'),
             ('ev_files', 'ev_files')]),
         (l1_model, feat_fit, [('fsf_files', 'fsf_file')]),
+        (feat_fit, feat_select, [('feat_dir', 'base_directory')]),
+        (feat_select, ds_cope, [('cope', 'in_file')]),
+        (feat_select, ds_cope, [('varcope', 'in_file')]),
+        (feat_select, ds_cope, [('zstat', 'in_file')]),
+        (feat_select, ds_cope, [('tstat', 'in_file')]),
     ])
     return workflow
 
