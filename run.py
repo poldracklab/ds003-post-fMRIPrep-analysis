@@ -104,7 +104,7 @@ def main():
     # Get absolute path to BIDS directory
     bids_dir = opts.bids_dir.resolve()
     layout = BIDSLayout(str(bids_dir), validate=False, derivatives=str(derivatives_dir))
-    query = {'domains': 'derivatives', 'return_type': 'file', 'desc': 'preproc',
+    query = {'domains': 'derivatives', 'desc': 'preproc',
              'suffix': 'bold', 'extensions': ['.nii', '.nii.gz']}
     if opts.run:
         query['run'] = '|'.join(opts.run)
@@ -123,7 +123,41 @@ def main():
 
     # The magic happens here
     if 'participant' in opts.analysis_level:
-        pass
+        from workflows import first_level_wf
+        base_entities = set(['subject', 'session', 'task', 'run', 'acquisition', 'reconstruction'])
+        in_files = []
+        in_mask = []
+        ev_files = []
+        regr_files = []
+        tr = []
+
+        for part in prepped_bold:
+            entities = part.entities
+            base = base_entities.intersection(entities)
+            subquery = {k: v for k, v in entities.items() if k in base}
+            in_files.append(part.path)
+            in_mask.append(layout.get(
+                domains='derivatives',
+                suffix='mask',
+                return_type='file',
+                space=query['space'],
+                **subquery)[0])
+            ev_files.append(layout.get(suffix='events', return_type='file', **subquery)[0])
+            regr_files.append(layout.get(
+                domains='derivatives',
+                suffix='regressors',
+                return_type='file',
+                **subquery)[0])
+            tr.append(part.metadata.get('RepetitionTime'))
+
+        workflow = first_level_wf()
+        workflow.inputs.inputnode.in_file = in_files[0]
+        workflow.inputs.inputnode.in_mask = in_mask[0]
+        workflow.inputs.inputnode.regressors = regr_files[0]
+        workflow.inputs.inputnode.events_file = ev_files[0]
+        workflow.inputs.inputnode.repetition_time = tr[0]
+        workflow.base_dir = opts.work_dir
+        workflow.run()
 
     if 'group' in opts.analysis_level:
         pass
