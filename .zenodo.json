@@ -2,6 +2,24 @@
   "contributors": [
     {
       "affiliation": "Department of Psychology, Stanford University, CA, USA",
+      "name": "Markiewicz, Christopher J.",
+      "orcid": "0000-0002-6533-164X",
+      "type": "Researcher"
+    },
+    {
+      "affiliation": "Department of Psychology, Stanford University, CA, USA",
+      "name": "Gorgolewski, Krzysztof J.",
+      "orcid": "0000-0003-3321-7583",
+      "type": "Researcher"
+    },
+    {
+      "affiliation": "MIT, HMS",
+      "name": "Ghosh, Satrajit",
+      "orcid": "0000-0002-5312-6729",
+      "type": "Researcher"
+    },
+    {
+      "affiliation": "Department of Psychology, Stanford University, CA, USA",
       "name": "Durnez, Joke",
       "orcid": "0000-0001-9030-2202",
       "type": "Researcher"
