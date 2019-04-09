@@ -93,13 +93,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN rm -f /usr/share/fsl/5.0/bin/imglob && \
     chmod a+rx $( python -c 'import site; print(site.getsitepackages()[0])' )/nipype/external/fsl_imglob.py && \
     ln -s $( python -c 'import site; print(site.getsitepackages()[0])' )/nipype/external/fsl_imglob.py /usr/share/fsl/5.0/bin/imglob
-# Installing this module
-COPY . /src/
-ENV PYTHONPATH="/src:$PYTHONPATH"
 
 RUN find $HOME -type d -exec chmod go=u {} + && \
     find $HOME -type f -exec chmod go=u {} +
 
+# Installing this module
+COPY . /src/
+ENV PYTHONPATH="/src:$PYTHONPATH"
 
 RUN ldconfig
 WORKDIR /tmp/
