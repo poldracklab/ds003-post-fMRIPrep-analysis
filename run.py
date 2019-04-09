@@ -140,6 +140,7 @@ def main():
                 domains='derivatives',
                 suffix='mask',
                 return_type='file',
+                extensions=['.nii', '.nii.gz'],
                 space=query['space'],
                 **subquery)[0])
             ev_files.append(layout.get(suffix='events', return_type='file', **subquery)[0])

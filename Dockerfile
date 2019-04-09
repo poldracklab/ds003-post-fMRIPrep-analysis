@@ -41,7 +41,8 @@ ENV PATH="/usr/lib/fsl/5.0:$PATH"
 # Create a shared $HOME directory
 RUN useradd -m -s /bin/bash -G users bidsapp
 WORKDIR /home/bidsapp
-ENV HOME="/home/bidsapp"
+ENV HOME="/home/bidsapp" \
+    USER="bidsapp"
 
 # Installing and setting up miniconda
 RUN curl -sSLO https://repo.continuum.io/miniconda/Miniconda3-4.5.11-Linux-x86_64.sh && \
