@@ -54,28 +54,28 @@ def first_level_wf(output_dir, fwhm=6.0, name='wf_1st_level'):
     feat_fit = pe.Node(fsl.FEAT(), name='feat_fit')
 
     feat_select = pe.Node(nio.SelectFiles({
-        'cope': 'cope1.nii.gz',
-        'pe': 'pe[0-9][0-9].nii.gz',
-        'tstat': 'tstat1.nii.gz',
-        'varcope': 'varcope1.nii.gz',
-        'zstat': 'zstat1.nii.gz',
+        'cope': 'stats/cope1.nii.gz',
+        'pe': 'stats/pe[0-9][0-9].nii.gz',
+        'tstat': 'stats/tstat1.nii.gz',
+        'varcope': 'stats/varcope1.nii.gz',
+        'zstat': 'stats/zstat1.nii.gz',
     }), name='feat_select')
 
     ds_cope = pe.Node(DerivativesDataSink(
-        base_directory=output_dir, keep_dtype=False, stat='cope', suffix='statmap',
-        cont='intask'), name='ds_cope', run_without_submitting=True)
+        base_directory=str(output_dir), keep_dtype=False, suffix='cope',
+        desc='intask'), name='ds_cope', run_without_submitting=True)
 
     ds_varcope = pe.Node(DerivativesDataSink(
-        base_directory=output_dir, keep_dtype=False, stat='varcope', suffix='statmap',
-        cont='intask'), name='ds_varcope', run_without_submitting=True)
+        base_directory=str(output_dir), keep_dtype=False, suffix='varcope',
+        desc='intask'), name='ds_varcope', run_without_submitting=True)
 
     ds_zstat = pe.Node(DerivativesDataSink(
-        base_directory=output_dir, keep_dtype=False, stat='z', suffix='statmap',
-        cont='intask'), name='ds_zstat', run_without_submitting=True)
+        base_directory=str(output_dir), keep_dtype=False, suffix='zstat',
+        desc='intask'), name='ds_zstat', run_without_submitting=True)
 
     ds_tstat = pe.Node(DerivativesDataSink(
-        base_directory=output_dir, keep_dtype=False, stat='t', suffix='statmap',
-        cont='intask'), name='ds_tstat', run_without_submitting=True)
+        base_directory=str(output_dir), keep_dtype=False, suffix='tstat',
+        desc='intask'), name='ds_tstat', run_without_submitting=True)
 
     workflow.connect([
         (inputnode, susan, [('in_file', 'inputnode.in_files'),
@@ -86,10 +86,10 @@ def first_level_wf(output_dir, fwhm=6.0, name='wf_1st_level'):
         (susan, l1_spec, [('outputnode.smoothed_files', 'functional_runs')]),
         (inputnode, l1_spec, [('repetition_time', 'time_repetition')]),
         (inputnode, l1_model, [('repetition_time', 'interscan_interval')]),
-        (inputnode, ds_cope, [('repetition_time', 'source_file')]),
-        (inputnode, ds_varcope, [('repetition_time', 'source_file')]),
-        (inputnode, ds_zstat, [('repetition_time', 'source_file')]),
-        (inputnode, ds_tstat, [('repetition_time', 'source_file')]),
+        (inputnode, ds_cope, [('in_file', 'source_file')]),
+        (inputnode, ds_varcope, [('in_file', 'source_file')]),
+        (inputnode, ds_zstat, [('in_file', 'source_file')]),
+        (inputnode, ds_tstat, [('in_file', 'source_file')]),
         (susan, runinfo, [('outputnode.smoothed_files', 'in_file')]),
         (runinfo, l1_spec, [
             ('info', 'subject_info'),
@@ -101,9 +101,49 @@ def first_level_wf(output_dir, fwhm=6.0, name='wf_1st_level'):
         (l1_model, feat_fit, [('fsf_files', 'fsf_file')]),
         (feat_fit, feat_select, [('feat_dir', 'base_directory')]),
         (feat_select, ds_cope, [('cope', 'in_file')]),
-        (feat_select, ds_cope, [('varcope', 'in_file')]),
-        (feat_select, ds_cope, [('zstat', 'in_file')]),
-        (feat_select, ds_cope, [('tstat', 'in_file')]),
+        (feat_select, ds_varcope, [('varcope', 'in_file')]),
+        (feat_select, ds_zstat, [('zstat', 'in_file')]),
+        (feat_select, ds_tstat, [('tstat', 'in_file')]),
+    ])
+    return workflow
+
+
+def second_level_wf(output_dir, name='wf_2nd_level'):
+    workflow = pe.Workflow(name=name)
+
+    inputnode = pe.Node(niu.IdentityInterface(
+        fields=['group_mask', 'in_copes', 'in_varcopes']),
+        name='inputnode')
+
+    # Configure FSL 2nd level analysis
+    l2_model = pe.Node(fsl.L2Model(), name='l2_model')
+    flameo_ols = pe.Node(fsl.FLAMEO(run_mode='ols'), name='flameo_ols')
+
+    # Thresholding - FDR ################################################
+    # Calculate pvalues with ztop
+    fdr_ztop = pe.Node(fsl.ImageMaths(op_string='-ztop', suffix='_pval'),
+                       name='fdr_ztop')
+    # Find FDR threshold: fdr -i zstat1_pval -m <group_mask> -q 0.05
+    # fdr_th = <write Nipype interface for fdr>
+    # Apply threshold:
+    # fslmaths zstat1_pval -mul -1 -add 1 -thr <fdr_th> -mas <group_mask> \
+    #     zstat1_thresh_vox_fdr_pstat1
+
+    # Thresholding - FWE ################################################
+    # smoothest -r %s -d %i -m %s
+    # ptoz 0.05 -g %f
+    # fslmaths %s -thr %s zstat1_thresh
+
+    # Thresholding - Cluster ############################################
+    # cluster -i %s -c %s -t 3.2 -p 0.05 -d %s --volume=%s  \
+    #     --othresh=thresh_cluster_fwe_zstat1 --connectivity=26 --mm
+
+    workflow.connect([
+        (inputnode, l2_model, [(('in_copes', _len), 'num_copes')]),
+        (inputnode, flameo_ols, [('group_mask', 'mask_file')]),
+        (l2_model, flameo_ols, [('design_mat', 'design_file'),
+                                ('design_con', 't_con_file'),
+                                ('design_grp', 'cov_split_file')]),
     ])
     return workflow
 
@@ -161,3 +201,7 @@ def _bids2nipypeinfo(in_file, events_file, regressors_file,
 
 def _get_tr(in_dict):
     return in_dict.get('RepetitionTime')
+
+
+def _len(inlist):
+    return len(inlist)

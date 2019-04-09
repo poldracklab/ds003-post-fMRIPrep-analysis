@@ -121,13 +121,13 @@ def main():
         print('No preprocessed files found under the given derivatives '
               'folder "%s".' % derivatives_dir, file=sys.stderr)
 
-    output_dir = opts.output_dir.resolve()
-    output_dir.mkdir(existok=True, parents=True)
-    logger.info('Writting output to "%s".', output_dir)
-
     # The magic happens here
     if 'participant' in opts.analysis_level:
         from workflows import first_level_wf
+
+        output_dir = opts.output_dir.resolve()
+        output_dir.mkdir(exist_ok=True, parents=True)
+        logger.info('Writting 1st level outputs to "%s".', output_dir)
         base_entities = set(['subject', 'session', 'task', 'run', 'acquisition', 'reconstruction'])
         in_files = []
         in_mask = []
@@ -165,6 +165,14 @@ def main():
         workflow.run()
 
     if 'group' in opts.analysis_level:
+        # glayout = BIDSLayout(str(bids_dir), validate=False, derivatives=str(output_dir))
+        # in_copes = glayout.get(
+        #     domains='derivatives',
+        #     suffix='statmap',
+        # )
+
+        # group_out = output_dir / 'FSLAnalysis' / 'grp-all'
+        # group_out.mkdir(exist_ok=True, parents=True)
         pass
 
     return 0
