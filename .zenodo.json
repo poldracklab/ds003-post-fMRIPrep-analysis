@@ -1,0 +1,37 @@
+{
+  "contributors": [
+    {
+      "affiliation": "Department of Psychology, Stanford University, CA, USA",
+      "name": "Durnez, Joke",
+      "orcid": "0000-0001-9030-2202",
+      "type": "Researcher"
+    }
+  ],
+  "creators": [
+    {
+      "affiliation": "Department of Psychology, Stanford University, CA, USA",
+      "name": "Esteban, Oscar",
+      "orcid": "0000-0001-8435-6191"
+    },
+    {
+      "affiliation": "Department of Psychology, Stanford University, CA, USA",
+      "name": "Ciric, Rastko",
+      "orcid": "0000-0001-6347-7939"
+    },
+    {
+      "affiliation": "Centre for Modern Interdisciplinary Technologies, Nicolaus Copernicus University in Toruń",
+      "name": "Finc, Karolina",
+      "orcid": "0000-0002-0157-030X"
+    },
+    {
+      "affiliation": "Department of Psychology, Stanford University, CA, USA",
+      "name": "Poldrack, Russell A.",
+      "orcid": "0000-0001-6755-0259"
+    }
+  ],
+  "description": "<p>An exemplary task analysis workflow to work on OpenNeuro's ds000003 data, after preprocessing with fMRIPrep.</p>",
+  "keywords": ["neuroimaging", "workflow", "pipeline", "task analysis", "fMRI", "BIDS"],
+  "license": "Apache-2.0",
+  "title": "Task fMRI Analysis using FSL and data preprocessed with fMRIPrep",
+  "upload_type": "software"
+}
