@@ -9,16 +9,20 @@ from nipype.workflows.fmri.fsl.preprocess import create_susan_smooth
 from niworkflows.interfaces.bids import DerivativesDataSink as BIDSDerivatives
 
 
+DATA_ITEMS = ['bold', 'mask', 'events', 'regressors', 'tr']
+
+
 class DerivativesDataSink(BIDSDerivatives):
     out_path_base = 'FSLAnalysis'
 
 
-def first_level_wf(output_dir, fwhm=6.0, name='wf_1st_level'):
+def first_level_wf(in_files, output_dir, fwhm=6.0, name='wf_1st_level'):
     workflow = pe.Workflow(name=name)
 
-    inputnode = pe.Node(niu.IdentityInterface(
-        fields=['in_file', 'in_mask', 'events_file', 'regressors', 'repetition_time']),
-        name='inputnode')
+    datasource = pe.Node(niu.Function(function=_dict_ds, output_names=DATA_ITEMS),
+                         name='datasource')
+    datasource.inputs.in_dict = in_files
+    datasource.iterables = ('sub', sorted(in_files.keys()))
 
     # Extract motion parameters from regressors file
     runinfo = pe.Node(niu.Function(
@@ -51,7 +55,7 @@ def first_level_wf(output_dir, fwhm=6.0, name='wf_1st_level'):
     # feat_spec generates an fsf model specification file
     feat_spec = pe.Node(fsl.FEATModel(), name='feat_spec')
     # feat_fit actually runs FEAT
-    feat_fit = pe.Node(fsl.FEAT(), name='feat_fit')
+    feat_fit = pe.Node(fsl.FEAT(), name='feat_fit', mem_gb=12)
 
     feat_select = pe.Node(nio.SelectFiles({
         'cope': 'stats/cope1.nii.gz',
@@ -78,18 +82,18 @@ def first_level_wf(output_dir, fwhm=6.0, name='wf_1st_level'):
         desc='intask'), name='ds_tstat', run_without_submitting=True)
 
     workflow.connect([
-        (inputnode, susan, [('in_file', 'inputnode.in_files'),
-                            ('in_mask', 'inputnode.mask_file')]),
-        (inputnode, runinfo, [
-            ('events_file', 'events_file'),
+        (datasource, susan, [('bold', 'inputnode.in_files'),
+                             ('mask', 'inputnode.mask_file')]),
+        (datasource, runinfo, [
+            ('events', 'events_file'),
             ('regressors', 'regressors_file')]),
         (susan, l1_spec, [('outputnode.smoothed_files', 'functional_runs')]),
-        (inputnode, l1_spec, [('repetition_time', 'time_repetition')]),
-        (inputnode, l1_model, [('repetition_time', 'interscan_interval')]),
-        (inputnode, ds_cope, [('in_file', 'source_file')]),
-        (inputnode, ds_varcope, [('in_file', 'source_file')]),
-        (inputnode, ds_zstat, [('in_file', 'source_file')]),
-        (inputnode, ds_tstat, [('in_file', 'source_file')]),
+        (datasource, l1_spec, [('tr', 'time_repetition')]),
+        (datasource, l1_model, [('tr', 'interscan_interval')]),
+        (datasource, ds_cope, [('bold', 'source_file')]),
+        (datasource, ds_varcope, [('bold', 'source_file')]),
+        (datasource, ds_zstat, [('bold', 'source_file')]),
+        (datasource, ds_tstat, [('bold', 'source_file')]),
         (susan, runinfo, [('outputnode.smoothed_files', 'in_file')]),
         (runinfo, l1_spec, [
             ('info', 'subject_info'),
@@ -205,3 +209,7 @@ def _get_tr(in_dict):
 
 def _len(inlist):
     return len(inlist)
+
+
+def _dict_ds(in_dict, sub, order=['bold', 'mask', 'events', 'regressors', 'tr']):
+    return tuple([in_dict[sub][k] for k in order])

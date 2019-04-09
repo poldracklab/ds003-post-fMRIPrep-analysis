@@ -36,6 +36,8 @@ def get_parser():
 
     # Options that affect how pyBIDS is configured
     g_bids = parser.add_argument_group('Options for filtering BIDS queries')
+    g_bids.add_argument('--participant-label', action='store', type=str,
+                        nargs='*', help='process only particular subjects')
     g_bids.add_argument('--task', action='store', type=str, nargs='*',
                         help='select a specific task to be processed')
     g_bids.add_argument('--run', action='store', type=int, nargs='*',
@@ -106,6 +108,9 @@ def main():
     layout = BIDSLayout(str(bids_dir), validate=False, derivatives=str(derivatives_dir))
     query = {'domains': 'derivatives', 'desc': 'preproc',
              'suffix': 'bold', 'extensions': ['.nii', '.nii.gz']}
+
+    if opts.participant_label:
+        query['subject'] = '|'.join(opts.participant_label)
     if opts.run:
         query['run'] = '|'.join(opts.run)
     if opts.task:
@@ -129,40 +134,33 @@ def main():
         output_dir.mkdir(exist_ok=True, parents=True)
         logger.info('Writting 1st level outputs to "%s".', output_dir)
         base_entities = set(['subject', 'session', 'task', 'run', 'acquisition', 'reconstruction'])
-        in_files = []
-        in_mask = []
-        ev_files = []
-        regr_files = []
-        tr = []
-
+        inputs = {}
         for part in prepped_bold:
             entities = part.entities
+            sub = entities['subject']
+            inputs[sub] = {}
             base = base_entities.intersection(entities)
             subquery = {k: v for k, v in entities.items() if k in base}
-            in_files.append(part.path)
-            in_mask.append(layout.get(
+            inputs[sub]['bold'] = part.path
+            inputs[sub]['mask'] = layout.get(
                 domains='derivatives',
                 suffix='mask',
                 return_type='file',
                 extensions=['.nii', '.nii.gz'],
                 space=query['space'],
-                **subquery)[0])
-            ev_files.append(layout.get(suffix='events', return_type='file', **subquery)[0])
-            regr_files.append(layout.get(
+                **subquery)[0]
+            inputs[sub]['events'] = layout.get(
+                suffix='events', return_type='file', **subquery)[0]
+            inputs[sub]['regressors'] = layout.get(
                 domains='derivatives',
                 suffix='regressors',
                 return_type='file',
-                **subquery)[0])
-            tr.append(part.metadata.get('RepetitionTime'))
+                **subquery)[0]
+            inputs[sub]['tr'] = part.metadata.get('RepetitionTime')
 
-        workflow = first_level_wf(output_dir)
-        workflow.inputs.inputnode.in_file = in_files[0]
-        workflow.inputs.inputnode.in_mask = in_mask[0]
-        workflow.inputs.inputnode.regressors = regr_files[0]
-        workflow.inputs.inputnode.events_file = ev_files[0]
-        workflow.inputs.inputnode.repetition_time = tr[0]
+        workflow = first_level_wf(inputs, output_dir)
         workflow.base_dir = opts.work_dir
-        workflow.run()
+        workflow.run(**plugin_settings)
 
     if 'group' in opts.analysis_level:
         # glayout = BIDSLayout(str(bids_dir), validate=False, derivatives=str(output_dir))
