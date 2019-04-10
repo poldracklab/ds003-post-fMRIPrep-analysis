@@ -1,6 +1,12 @@
 {
   "contributors": [
     {
+      "name": "Blair, Ross",
+      "affiliation": "Department of Psychology, Stanford University, CA, USA",
+      "orcid": "0000-0003-3007-1056",
+      "type": "Researcher"
+    },
+    {
       "affiliation": "Department of Psychology, Stanford University, CA, USA",
       "name": "Markiewicz, Christopher J.",
       "orcid": "0000-0002-6533-164X",
@@ -13,15 +19,105 @@
       "type": "Researcher"
     },
     {
-      "affiliation": "MIT, HMS",
-      "name": "Ghosh, Satrajit",
-      "orcid": "0000-0002-5312-6729",
+      "name": "Moodie, Craig",
+      "affiliation": "Department of Psychology, Stanford University, CA, USA",
+      "orcid": "0000-0003-0867-1469",
       "type": "Researcher"
     },
     {
-      "affiliation": "Department of Psychology, Stanford University, CA, USA",
-      "name": "Durnez, Joke",
-      "orcid": "0000-0001-9030-2202",
+      "name": "Kent, James D.",
+      "affiliation": "Neuroscience Program, University of Iowa, IA, USA",
+      "orcid": "0000-0002-4892-2659",
+      "type": "Researcher"
+    },
+    {
+      "name": "Goncalves, Mathias",
+      "affiliation": "McGovern Institute for Brain Research, MIT, MA, USA",
+      "orcid": "0000-0002-7252-7771",
+      "type": "Researcher"
+    },
+    {
+      "name": "DuPre, Elizabeth",
+      "affiliation": "Montreal Neurological Institute, McGill University",
+      "orcid": "0000-0003-1358-196X",
+      "type": "Researcher"
+    },
+    {
+      "name": "Gomez, Daniel E. P.",
+      "affiliation": "Donders Institute for Brain, Cognition and Behaviour, Radboud University Nijmegen",
+      "orcid": "0000-0001-8635-021X",
+      "type": "Researcher"
+    },
+    {
+      "name": "Ye, Zhifang",
+      "affiliation": "State Key Laboratory of Cognitive Neuroscience and Learning, Beijing Normal University",
+      "orcid": "0000-0003-0489-2619",
+      "type": "Researcher"
+    },
+    {
+      "name": "Salo, Taylor",
+      "affiliation": "Department of Psychology, Florida International University, FL, USA",
+      "orcid": "0000-0001-9813-3167",
+      "type": "Researcher"
+    },
+    {
+      "name": "Valabregue, Romain",
+      "affiliation": "CENIR, INSERM U 1127, CNRS UMR 7225, UPMC Univ Paris 06 UMR S 1127, Institut du Cerveau et de la Moelle épinière, ICM, F-75013, Paris, France",
+      "orcid": "0000-0002-1814-9570",
+      "type": "Researcher"
+    },
+    {
+      "name": "Amlien, Inge K.",
+      "affiliation": "Center for Lifespan Changes in Brain and Cognition, University of Oslo",
+      "orcid": "0000-0002-8508-9088",
+      "type": "Researcher"
+    },
+    {
+      "name": "Liem, Franz",
+      "affiliation": "URPP Dynamics of Healthy Aging, University of Zurich",
+      "orcid": "0000-0003-0646-4810",
+      "type": "Researcher"
+    },
+    {
+      "name": "Jacoby, Nir",
+      "affiliation": "Department of Psychology, Columbia University, NY, USA",
+      "orcid": "0000-0001-7936-9991",
+      "type": "Researcher"
+    },
+    {
+      "name": "Stojić, Hrvoje",
+      "affiliation": "Max Planck UCL Centre for Computational Psychiatry and Ageing Research, University College London",
+      "orcid": "0000-0002-9699-9052",
+      "type": "Researcher"
+    },
+    {
+      "name": "Halchenko, Yaroslav O.",
+      "affiliation": "Department of Psychological and Brain Sciences, Dartmouth College Hanover, NH, USA",
+      "orcid": "0000-0003-3456-2493",
+      "type": "Researcher"
+    },
+    {
+      "name": "Cieslak, Matthew",
+      "affiliation": "Department of Neuropsychiatry, Perelman School of Medicine, University of Pennsylvania, PA, USA",
+      "orcid": "0000-0002-1931-4734",
+      "type": "Researcher"
+    },
+    {
+      "name": "Urchs, Sebastian",
+      "affiliation": "Montreal Neurological Institute, McGill University",
+      "orcid": "0000-0001-5504-8579",
+      "type": "Researcher"
+    },
+    {
+      "affiliation": "Department of Psychology, University of Texas at Austin, TX, USA",
+      "name": "de la Vega, Alejandro",
+      "orcid": "0000-0001-9062-3778",
+      "type": "Researcher"
+    },
+    {
+      "affiliation": "Department of Psychology, University of Texas at Austin, TX, USA",
+      "name": "Yarkoni, Tal",
+      "orcid": "0000-0002-6558-5113",
       "type": "Researcher"
     }
   ],
@@ -40,6 +136,16 @@
       "affiliation": "Centre for Modern Interdisciplinary Technologies, Nicolaus Copernicus University in Toruń",
       "name": "Finc, Karolina",
       "orcid": "0000-0002-0157-030X"
+    },
+    {
+      "affiliation": "Department of Psychology, Stanford University, CA, USA",
+      "name": "Durnez, Joke",
+      "orcid": "0000-0001-9030-2202"
+    },
+    {
+      "affiliation": "McGovern Institute for Brain Research (MIT), and Department of Otolaryngology (Harvard Medical School), MA, USA",
+      "name": "Ghosh, Satrajit",
+      "orcid": "0000-0002-5312-6729"
     },
     {
       "affiliation": "Department of Psychology, Stanford University, CA, USA",
