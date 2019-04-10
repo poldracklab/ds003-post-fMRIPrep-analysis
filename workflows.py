@@ -32,7 +32,7 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, name='wf_1st_level'):
 
     # Set the column names to be used from the confounds file
     runinfo.inputs.regressors_names = ['dvars', 'framewise_displacement'] + \
-        ['a_comp_cor_%02d' % i for i in range(6)]
+        ['a_comp_cor_%02d' % i for i in range(6)] + ['cosine%02d' % i for i in range(4)]
 
     # SUSAN smoothing
     susan = create_susan_smooth()
