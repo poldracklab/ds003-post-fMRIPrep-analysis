@@ -10,18 +10,17 @@ from nipype.interfaces.base import traits, TraitedSpec
 
 
 class PtoZInputSpec(FSLCommandInputSpec):
-    pvalue = traits.Float(0.05, argstr='%f', mandatory=True, usedefault=True,
-                          position=0,
+    pvalue = traits.Float(0.05, argstr='%f', usedefault=True, position=0,
                           desc='p-value for which the corresponding '
-                               'z-statistic should be computed')
+                               'z-statistic should be computed (default 0.05)')
     two_tailed = traits.Bool(argstr='-2', position=1,
                              desc='use 2-tailed conversion (default is '
                                   '1-tailed)')
-    grf = traits.Float(argstr='-g %f', position=2,
-                       desc='use GRF maximum-height theory instead of '
-                            'Gaussian PDF. To enable this option, specify '
-                            'the number of resels as the argument. This can '
-                            'be estimated using fsl.SmoothEstimate.')
+    resels = traits.Float(argstr='-g %f', position=2,
+                          desc='use GRF maximum-height theory instead of '
+                               'Gaussian PDF. To enable this option, specify '
+                               'the number of resels as the argument. This can '
+                               'be estimated using fsl.SmoothEstimate.')
 
 
 class PtoZOutputSpec(TraitedSpec):

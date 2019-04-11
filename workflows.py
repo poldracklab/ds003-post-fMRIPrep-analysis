@@ -7,6 +7,7 @@ from nipype.algorithms.modelgen import SpecifyModel
 from nipype.interfaces import fsl, utility as niu, io as nio
 from nipype.workflows.fmri.fsl.preprocess import create_susan_smooth
 from niworkflows.interfaces.bids import DerivativesDataSink as BIDSDerivatives
+from interfaces import PtoZ
 
 
 DATA_ITEMS = ['bold', 'mask', 'events', 'regressors', 'tr']
@@ -135,8 +136,13 @@ def second_level_wf(output_dir, name='wf_2nd_level'):
 
     # Thresholding - FWE ################################################
     # smoothest -r %s -d %i -m %s
+    fwe_smoothness = pe.Node(fsl.SmoothEstimate(), name='fwe_smoothness')
     # ptoz 0.05 -g %f
+    fwe_ptoz = pe.MapNode(PtoZ(pvalue=0.05), name='fwe_ptoz',
+                          iterfield=['dof'])
     # fslmaths %s -thr %s zstat1_thresh
+    fwe_thresh = pe.MapNode(fsl.Threshold(), name='fwe_thresh',
+                            iterfield=['in_file', 'thresh'])
 
     # Thresholding - Cluster ############################################
     # cluster -i %s -c %s -t 3.2 -p 0.05 -d %s --volume=%s  \
@@ -148,6 +154,10 @@ def second_level_wf(output_dir, name='wf_2nd_level'):
         (l2_model, flameo_ols, [('design_mat', 'design_file'),
                                 ('design_con', 't_con_file'),
                                 ('design_grp', 'cov_split_file')]),
+        (flameo_ols, fwe_smoothness, [('res4d', 'residual_fit_file')]),
+        (flameo_ols, fwe_thresh, [('zstats', 'in_file')]),
+        (fwe_smoothness, fwe_ptoz, [('resels', 'resels')]),
+        (fwe_ptoz, fwe_thresh, [('zstat', 'thresh')])
     ])
     return workflow
 
