@@ -138,10 +138,9 @@ def second_level_wf(output_dir, name='wf_2nd_level'):
     # smoothest -r %s -d %i -m %s
     fwe_smoothness = pe.Node(fsl.SmoothEstimate(), name='fwe_smoothness')
     # ptoz 0.05 -g %f
-    fwe_ptoz = pe.MapNode(PtoZ(pvalue=0.05), name='fwe_ptoz',
-                          iterfield=['dof'])
+    fwe_ptoz = pe.Node(PtoZ(pvalue=0.05), name='fwe_ptoz')
     # fslmaths %s -thr %s zstat1_thresh
-    fwe_thresh = pe.MapNode(fsl.Threshold(), name='fwe_thresh',
+    fwe_thresh = pe.Node(fsl.Threshold(), name='fwe_thresh',
                             iterfield=['in_file', 'thresh'])
 
     # Thresholding - Cluster ############################################
@@ -151,10 +150,12 @@ def second_level_wf(output_dir, name='wf_2nd_level'):
     workflow.connect([
         (inputnode, l2_model, [(('in_copes', _len), 'num_copes')]),
         (inputnode, flameo_ols, [('group_mask', 'mask_file')]),
+        (inputnode, fwe_smoothness, [(('in_copes', _dof), 'dof')]),
         (l2_model, flameo_ols, [('design_mat', 'design_file'),
                                 ('design_con', 't_con_file'),
                                 ('design_grp', 'cov_split_file')]),
-        (flameo_ols, fwe_smoothness, [('res4d', 'residual_fit_file')]),
+        (flameo_ols, fwe_smoothness, [(('res4d', simplify_list),
+                                       'residual_fit_file')]),
         (flameo_ols, fwe_thresh, [('zstats', 'in_file')]),
         (fwe_smoothness, fwe_ptoz, [('resels', 'resels')]),
         (fwe_ptoz, fwe_thresh, [('zstat', 'thresh')])
@@ -219,6 +220,10 @@ def _get_tr(in_dict):
 
 def _len(inlist):
     return len(inlist)
+
+
+def _dof(inlist):
+    return len(inlist) - 1
 
 
 def _dict_ds(in_dict, sub, order=['bold', 'mask', 'events', 'regressors', 'tr']):
