@@ -148,8 +148,7 @@ def second_level_wf(output_dir, name='wf_2nd_level'):
     # ptoz 0.05 -g %f
     fwe_ptoz = pe.Node(PtoZ(pvalue=0.05), name='fwe_ptoz')
     # fslmaths %s -thr %s zstat1_thresh
-    fwe_thresh = pe.Node(fsl.Threshold(), name='fwe_thresh',
-                            iterfield=['in_file', 'thresh'])
+    fwe_thresh = pe.Node(fsl.Threshold(), name='fwe_thresh')
 
     # Thresholding - Cluster ############################################
     # cluster -i %s -c %s -t 3.2 -p 0.05 -d %s --volume=%s  \

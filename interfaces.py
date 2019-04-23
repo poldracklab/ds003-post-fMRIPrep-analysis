@@ -36,5 +36,5 @@ class PtoZ(FSLCommand):
 
     def aggregate_outputs(self, runtime=None, needed_outputs=None):
         outputs = self._outputs()
-        outputs.zstat = float(runtime.stdout)
+        outputs.zstat = float(runtime.stdout.strip())
         return outputs
