@@ -120,9 +120,17 @@ def second_level_wf(output_dir, name='wf_2nd_level'):
         fields=['group_mask', 'in_copes', 'in_varcopes']),
         name='inputnode')
 
+    outputnode = pe.Node(niu.IdentityInterface(
+        fields=['zstats_raw', 'zstats_fwe', 'zstats_clust',
+                'clust_index_file', 'clust_localmax_txt_file']),
+        name='outputnode')
+
     # Configure FSL 2nd level analysis
     l2_model = pe.Node(fsl.L2Model(), name='l2_model')
     flameo_ols = pe.Node(fsl.FLAMEO(run_mode='ols'), name='flameo_ols')
+
+    merge_copes = pe.Node(fsl.Merge(dimension='t'), name='merge_copes')
+    merge_varcopes = pe.Node(fsl.Merge(dimension='t'), name='merge_varcopes')
 
     # Thresholding - FDR ################################################
     # Calculate pvalues with ztop
@@ -136,7 +144,7 @@ def second_level_wf(output_dir, name='wf_2nd_level'):
 
     # Thresholding - FWE ################################################
     # smoothest -r %s -d %i -m %s
-    fwe_smoothness = pe.Node(fsl.SmoothEstimate(), name='fwe_smoothness')
+    smoothness = pe.Node(fsl.SmoothEstimate(), name='smoothness')
     # ptoz 0.05 -g %f
     fwe_ptoz = pe.Node(PtoZ(pvalue=0.05), name='fwe_ptoz')
     # fslmaths %s -thr %s zstat1_thresh
@@ -146,19 +154,43 @@ def second_level_wf(output_dir, name='wf_2nd_level'):
     # Thresholding - Cluster ############################################
     # cluster -i %s -c %s -t 3.2 -p 0.05 -d %s --volume=%s  \
     #     --othresh=thresh_cluster_fwe_zstat1 --connectivity=26 --mm
+    cluster = pe.Node(fsl.Cluster(
+            connectivity=26,
+            threshold=3.2,
+            pthreshold=0.05,
+            out_threshold_file=True,
+            out_index_file=True,
+            out_localmax_txt_file=True),
+        name='cluster')
 
     workflow.connect([
         (inputnode, l2_model, [(('in_copes', _len), 'num_copes')]),
         (inputnode, flameo_ols, [('group_mask', 'mask_file')]),
-        (inputnode, fwe_smoothness, [(('in_copes', _dof), 'dof')]),
+        (inputnode, smoothness, [('group_mask', 'mask_file'),
+                                 (('in_copes', _dof), 'dof')]),
+        (inputnode, merge_copes, [('in_copes', 'in_files')]),
+        (inputnode, merge_varcopes, [('in_varcopes', 'in_files')]),
+
         (l2_model, flameo_ols, [('design_mat', 'design_file'),
                                 ('design_con', 't_con_file'),
                                 ('design_grp', 'cov_split_file')]),
-        (flameo_ols, fwe_smoothness, [(('res4d', simplify_list),
-                                       'residual_fit_file')]),
+        (merge_copes, flameo_ols, [('merged_file', 'cope_file')]),
+        (merge_varcopes, flameo_ols, [('merged_file', 'varcope_file')]),
+        (flameo_ols, smoothness, [('res4d', 'residual_fit_file')]),
         (flameo_ols, fwe_thresh, [('zstats', 'in_file')]),
-        (fwe_smoothness, fwe_ptoz, [('resels', 'resels')]),
-        (fwe_ptoz, fwe_thresh, [('zstat', 'thresh')])
+        (smoothness, fwe_ptoz, [('resels', 'resels')]),
+        (fwe_ptoz, fwe_thresh, [('zstat', 'thresh')]),
+        (flameo_ols, cluster, [('zstats', 'in_file')]),
+        (merge_copes, cluster, [('merged_file', 'cope_file')]),
+        (smoothness, cluster, [('volume', 'volume'),
+                               ('dlh', 'dlh')]),
+
+        (flameo_ols, outputnode, [('zstats', 'zstats_raw')]),
+        (fwe_thresh, outputnode, [('out_file', 'zstats_fwe')]),
+        (cluster, outputnode, [('threshold_file', 'zstats_clust'),
+                               ('index_file', 'clust_index_file'),
+                               ('localmax_txt_file',
+                                'clust_localmax_txt_file')]),
     ])
     return workflow
 
