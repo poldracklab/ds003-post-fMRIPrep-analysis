@@ -174,7 +174,7 @@ def second_level_wf(output_dir, name='wf_2nd_level'):
                                 ('design_con', 't_con_file'),
                                 ('design_grp', 'cov_split_file')]),
         (merge_copes, flameo_ols, [('merged_file', 'cope_file')]),
-        (merge_varcopes, flameo_ols, [('merged_file', 'varcope_file')]),
+        (merge_varcopes, flameo_ols, [('merged_file', 'var_cope_file')]),
         (flameo_ols, smoothness, [('res4d', 'residual_fit_file')]),
         (flameo_ols, fwe_thresh, [('zstats', 'in_file')]),
         (smoothness, fwe_ptoz, [('resels', 'resels')]),
@@ -240,7 +240,13 @@ def _bids2nipypeinfo(in_file, events_file, regressors_file,
 
     if 'regressor_names' in bunch_fields:
         runinfo.regressor_names = regressors_names
-        runinfo.regressors = regress_data[regressors_names].fillna(0.0).values.T.tolist()
+        try:
+            runinfo.regressors = regress_data[regressors_names]
+        except KeyError:
+            regressors_names = set(regressors_names).intersection(
+                                   set(regress_data.columns))
+            runinfo.regressors = regress_data[regressors_names]
+        runinfo.regressors = runinfo.regressors.fillna(0.0).values.T.tolist()
 
     return [runinfo], str(out_motion)
 
