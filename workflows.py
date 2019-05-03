@@ -113,7 +113,7 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, name='wf_1st_level'):
     return workflow
 
 
-def second_level_wf(output_dir, name='wf_2nd_level'):
+def second_level_wf(output_dir, bids_ref, name='wf_2nd_level'):
     workflow = pe.Workflow(name=name)
 
     inputnode = pe.Node(niu.IdentityInterface(
@@ -162,6 +162,33 @@ def second_level_wf(output_dir, name='wf_2nd_level'):
             out_localmax_txt_file=True),
         name='cluster')
 
+    ds_zraw = pe.Node(DerivativesDataSink(
+        base_directory=str(output_dir), keep_dtype=False, suffix='zstat', sub='all'),
+        name='ds_zraw', run_without_submitting=True)
+    ds_zraw.inputs.source_file = bids_ref
+
+    ds_zfwe = pe.Node(DerivativesDataSink(
+        base_directory=str(output_dir), keep_dtype=False, suffix='zstat',
+        desc='fwe', sub='all'), name='ds_zfwe', run_without_submitting=True)
+    ds_zfwe.inputs.source_file = bids_ref
+
+    """
+    ds_zclust = pe.Node(DerivativesDataSink(
+        base_directory=str(output_dir), keep_dtype=False, suffix='zstat',
+        desc='clust', sub='all'), name='ds_zclust', run_without_submitting=True)
+    ds_zclust.inputs.source_file = bids_ref
+
+    ds_clustidx = pe.Node(DerivativesDataSink(
+        base_directory=str(output_dir), keep_dtype=False, suffix='clusterindex', sub='all'),
+        name='ds_clustidx', run_without_submitting=True)
+    ds_clustidx.inputs.source_file = bids_ref
+
+    ds_clustlmax = pe.Node(DerivativesDataSink(
+        base_directory=str(output_dir), keep_dtype=False, suffix='localmax',
+        desc='intask', sub='all'), name='ds_clustlmax', run_without_submitting=True)
+    ds_clustlmax.inputs.source_file = bids_ref
+    """
+
     workflow.connect([
         (inputnode, l2_model, [(('in_copes', _len), 'num_copes')]),
         (inputnode, flameo_ols, [('group_mask', 'mask_file')]),
@@ -179,17 +206,16 @@ def second_level_wf(output_dir, name='wf_2nd_level'):
         (flameo_ols, fwe_thresh, [('zstats', 'in_file')]),
         (smoothness, fwe_ptoz, [('resels', 'resels')]),
         (fwe_ptoz, fwe_thresh, [('zstat', 'thresh')]),
-        (flameo_ols, cluster, [('zstats', 'in_file')]),
-        (merge_copes, cluster, [('merged_file', 'cope_file')]),
-        (smoothness, cluster, [('volume', 'volume'),
-                               ('dlh', 'dlh')]),
+        # (flameo_ols, cluster, [('zstats', 'in_file')]),
+        # (merge_copes, cluster, [('merged_file', 'cope_file')]),
+        # (smoothness, cluster, [('volume', 'volume'),
+        #                        ('dlh', 'dlh')]),
 
-        (flameo_ols, outputnode, [('zstats', 'zstats_raw')]),
-        (fwe_thresh, outputnode, [('out_file', 'zstats_fwe')]),
-        (cluster, outputnode, [('threshold_file', 'zstats_clust'),
-                               ('index_file', 'clust_index_file'),
-                               ('localmax_txt_file',
-                                'clust_localmax_txt_file')]),
+        (flameo_ols, ds_zraw, [('zstats', 'in_file')]),
+        (fwe_thresh, ds_zfwe, [('out_file', 'in_file')]),
+        # (cluster, ds_zclust, [('threshold_file', 'in_file')]),
+        # (cluster, ds_clustidx, [('index_file', 'in_file')]),
+        # (cluster, ds_clustlmax, [('localmax_txt_file', 'in_file')]),
     ])
     return workflow
 
@@ -243,8 +269,8 @@ def _bids2nipypeinfo(in_file, events_file, regressors_file,
         try:
             runinfo.regressors = regress_data[regressors_names]
         except KeyError:
-            regressors_names = set(regressors_names).intersection(
-                                   set(regress_data.columns))
+            regressors_names = list(set(regressors_names).intersection(
+                                    set(regress_data.columns)))
             runinfo.regressors = regress_data[regressors_names]
         runinfo.regressors = runinfo.regressors.fillna(0.0).values.T.tolist()
 
