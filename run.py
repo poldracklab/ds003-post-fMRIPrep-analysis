@@ -174,21 +174,12 @@ def main():
         workflow.run(**plugin_settings)
 
     if 'group' in opts.analysis_level:
-        # glayout = BIDSLayout(str(bids_dir), validate=False, derivatives=str(output_dir))
-        # in_copes = glayout.get(
-        #     domains='derivatives',
-        #     suffix='statmap',
-        # )
-
-        # group_out = output_dir / 'FSLAnalysis' / 'grp-all'
-        # group_out.mkdir(exist_ok=True, parents=True)
         from workflows import second_level_wf
+        import re
 
-        # get copes, varcopes, and group mask file
-        # group mask from templateflow?
         output_dir = opts.output_dir.resolve()
         metafile = '{}/FSLAnalysis/dataset_description.json'.format(output_dir)
-        with open(metafile, 'w') as metafile:  
+        with open(metafile, 'w') as metafile:
             json.dump(metadata, metafile, indent=4)
         glayout = BIDSLayout(str(bids_dir), validate=False, derivatives=str(output_dir))
 
@@ -213,6 +204,7 @@ def main():
                 extensions=['.nii', '.nii.gz'],
                 space=query['space'],
                 **subquery)[0])
+        bids_ref = re.sub('sub-[0-9]+', 'sub-all', prepped_bold[0].path)
 
         group_mask = tpl_get(entities['space'],
                              resolution=2,
@@ -222,7 +214,7 @@ def main():
         group_out = output_dir / 'FSLAnalysis' / 'grp_all'
         group_out.mkdir(exist_ok=True, parents=True)
 
-        workflow = second_level_wf(group_out, prepped_bold[0].path)
+        workflow = second_level_wf(group_out, bids_ref)
 
         # set inputs
         workflow.inputs.inputnode.group_mask = str(group_mask)
