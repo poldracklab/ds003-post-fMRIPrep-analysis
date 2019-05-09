@@ -172,7 +172,6 @@ def second_level_wf(output_dir, bids_ref, name='wf_2nd_level'):
         desc='fwe', sub='all'), name='ds_zfwe', run_without_submitting=True)
     ds_zfwe.inputs.source_file = bids_ref
 
-    """
     ds_zclust = pe.Node(DerivativesDataSink(
         base_directory=str(output_dir), keep_dtype=False, suffix='zstat',
         desc='clust', sub='all'), name='ds_zclust', run_without_submitting=True)
@@ -187,7 +186,6 @@ def second_level_wf(output_dir, bids_ref, name='wf_2nd_level'):
         base_directory=str(output_dir), keep_dtype=False, suffix='localmax',
         desc='intask', sub='all'), name='ds_clustlmax', run_without_submitting=True)
     ds_clustlmax.inputs.source_file = bids_ref
-    """
 
     workflow.connect([
         (inputnode, l2_model, [(('in_copes', _len), 'num_copes')]),
@@ -206,16 +204,16 @@ def second_level_wf(output_dir, bids_ref, name='wf_2nd_level'):
         (flameo_ols, fwe_thresh, [('zstats', 'in_file')]),
         (smoothness, fwe_ptoz, [('resels', 'resels')]),
         (fwe_ptoz, fwe_thresh, [('zstat', 'thresh')]),
-        # (flameo_ols, cluster, [('zstats', 'in_file')]),
-        # (merge_copes, cluster, [('merged_file', 'cope_file')]),
-        # (smoothness, cluster, [('volume', 'volume'),
-        #                        ('dlh', 'dlh')]),
+        (flameo_ols, cluster, [('zstats', 'in_file')]),
+        (merge_copes, cluster, [('merged_file', 'cope_file')]),
+        (smoothness, cluster, [('volume', 'volume'),
+                               ('dlh', 'dlh')]),
 
         (flameo_ols, ds_zraw, [('zstats', 'in_file')]),
         (fwe_thresh, ds_zfwe, [('out_file', 'in_file')]),
-        # (cluster, ds_zclust, [('threshold_file', 'in_file')]),
-        # (cluster, ds_clustidx, [('index_file', 'in_file')]),
-        # (cluster, ds_clustlmax, [('localmax_txt_file', 'in_file')]),
+        (cluster, ds_zclust, [('threshold_file', 'in_file')]),
+        (cluster, ds_clustidx, [('index_file', 'in_file')]),
+        (cluster, ds_clustlmax, [('localmax_txt_file', 'in_file')]),
     ])
     return workflow
 
