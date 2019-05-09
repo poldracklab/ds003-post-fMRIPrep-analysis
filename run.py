@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import logging
+import json
 from pathlib import Path
 from templateflow.api import get as tpl_get, templates as get_tpl_list
 
@@ -8,6 +9,16 @@ __version__ = '1.0.0'
 logging.addLevelName(25, 'IMPORTANT')  # Add a new level between INFO and WARNING
 logging.addLevelName(15, 'VERBOSE')  # Add a new level between INFO and DEBUG
 logger = logging.getLogger('cli')
+
+
+metadata = {
+    'Name': 'ds003 example postprocessing',
+    'BIDSVersion': '1.1.1',
+    'PipelineDescription': {
+        'Name': 'ds003-post-fMRIPrep-analysis'
+    },
+    'CodeURL': 'https://github.com/poldracklab/ds003-post-fMRIPrep-analysis'
+}
 
 
 def get_parser():
@@ -176,7 +187,9 @@ def main():
         # get copes, varcopes, and group mask file
         # group mask from templateflow?
         output_dir = opts.output_dir.resolve()
-        print(output_dir)
+        metafile = '{}/FSLAnalysis/dataset_description.json'.format(output_dir)
+        with open(metafile, 'w') as metafile:  
+            json.dump(metadata, metafile, indent=4)
         glayout = BIDSLayout(str(bids_dir), validate=False, derivatives=str(output_dir))
 
         base_entities = set(['subject', 'session', 'task', 'run', 'acquisition', 'reconstruction'])
@@ -195,7 +208,7 @@ def main():
                 **subquery)[0])
             in_varcopes.append(glayout.get(
                 domains='derivatives',
-                suffix='cope',
+                suffix='varcope',
                 return_type='file',
                 extensions=['.nii', '.nii.gz'],
                 space=query['space'],
