@@ -211,7 +211,7 @@ def main():
                              desc='brain',
                              suffix='mask')
 
-        group_out = output_dir / 'FSLAnalysis' / 'grp_all'
+        group_out = output_dir / 'FSLAnalysis'
         group_out.mkdir(exist_ok=True, parents=True)
 
         workflow = second_level_wf(group_out, bids_ref)

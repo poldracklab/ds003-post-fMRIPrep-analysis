@@ -17,6 +17,10 @@ class DerivativesDataSink(BIDSDerivatives):
     out_path_base = 'FSLAnalysis'
 
 
+class GroupDerivativesDataSink(BIDSDerivatives):
+    out_path_base = 'grp_all'
+
+
 def first_level_wf(in_files, output_dir, fwhm=6.0, name='wf_1st_level'):
     workflow = pe.Workflow(name=name)
 
@@ -162,27 +166,27 @@ def second_level_wf(output_dir, bids_ref, name='wf_2nd_level'):
             out_localmax_txt_file=True),
         name='cluster')
 
-    ds_zraw = pe.Node(DerivativesDataSink(
+    ds_zraw = pe.Node(GroupDerivativesDataSink(
         base_directory=str(output_dir), keep_dtype=False, suffix='zstat', sub='all'),
         name='ds_zraw', run_without_submitting=True)
     ds_zraw.inputs.source_file = bids_ref
 
-    ds_zfwe = pe.Node(DerivativesDataSink(
+    ds_zfwe = pe.Node(GroupDerivativesDataSink(
         base_directory=str(output_dir), keep_dtype=False, suffix='zstat',
         desc='fwe', sub='all'), name='ds_zfwe', run_without_submitting=True)
     ds_zfwe.inputs.source_file = bids_ref
 
-    ds_zclust = pe.Node(DerivativesDataSink(
+    ds_zclust = pe.Node(GroupDerivativesDataSink(
         base_directory=str(output_dir), keep_dtype=False, suffix='zstat',
         desc='clust', sub='all'), name='ds_zclust', run_without_submitting=True)
     ds_zclust.inputs.source_file = bids_ref
 
-    ds_clustidx = pe.Node(DerivativesDataSink(
+    ds_clustidx = pe.Node(GroupDerivativesDataSink(
         base_directory=str(output_dir), keep_dtype=False, suffix='clusterindex', sub='all'),
         name='ds_clustidx', run_without_submitting=True)
     ds_clustidx.inputs.source_file = bids_ref
 
-    ds_clustlmax = pe.Node(DerivativesDataSink(
+    ds_clustlmax = pe.Node(GroupDerivativesDataSink(
         base_directory=str(output_dir), keep_dtype=False, suffix='localmax',
         desc='intask', sub='all'), name='ds_clustlmax', run_without_submitting=True)
     ds_clustlmax.inputs.source_file = bids_ref
