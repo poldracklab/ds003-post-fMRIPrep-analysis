@@ -7,6 +7,7 @@ from nipype.algorithms.modelgen import SpecifyModel
 from nipype.interfaces import fsl, utility as niu, io as nio
 from nipype.workflows.fmri.fsl.preprocess import create_susan_smooth
 from niworkflows.interfaces.bids import DerivativesDataSink as BIDSDerivatives
+from interfaces import PtoZ
 
 
 DATA_ITEMS = ['bold', 'mask', 'events', 'regressors', 'tr']
@@ -14,6 +15,10 @@ DATA_ITEMS = ['bold', 'mask', 'events', 'regressors', 'tr']
 
 class DerivativesDataSink(BIDSDerivatives):
     out_path_base = 'FSLAnalysis'
+
+
+class GroupDerivativesDataSink(BIDSDerivatives):
+    out_path_base = 'grp_all'
 
 
 def first_level_wf(in_files, output_dir, fwhm=6.0, name='wf_1st_level'):
@@ -112,16 +117,24 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, name='wf_1st_level'):
     return workflow
 
 
-def second_level_wf(output_dir, name='wf_2nd_level'):
+def second_level_wf(output_dir, bids_ref, name='wf_2nd_level'):
     workflow = pe.Workflow(name=name)
 
     inputnode = pe.Node(niu.IdentityInterface(
         fields=['group_mask', 'in_copes', 'in_varcopes']),
         name='inputnode')
 
+    outputnode = pe.Node(niu.IdentityInterface(
+        fields=['zstats_raw', 'zstats_fwe', 'zstats_clust',
+                'clust_index_file', 'clust_localmax_txt_file']),
+        name='outputnode')
+
     # Configure FSL 2nd level analysis
     l2_model = pe.Node(fsl.L2Model(), name='l2_model')
     flameo_ols = pe.Node(fsl.FLAMEO(run_mode='ols'), name='flameo_ols')
+
+    merge_copes = pe.Node(fsl.Merge(dimension='t'), name='merge_copes')
+    merge_varcopes = pe.Node(fsl.Merge(dimension='t'), name='merge_varcopes')
 
     # Thresholding - FDR ################################################
     # Calculate pvalues with ztop
@@ -135,19 +148,76 @@ def second_level_wf(output_dir, name='wf_2nd_level'):
 
     # Thresholding - FWE ################################################
     # smoothest -r %s -d %i -m %s
+    smoothness = pe.Node(fsl.SmoothEstimate(), name='smoothness')
     # ptoz 0.05 -g %f
+    fwe_ptoz = pe.Node(PtoZ(pvalue=0.05), name='fwe_ptoz')
     # fslmaths %s -thr %s zstat1_thresh
+    fwe_thresh = pe.Node(fsl.Threshold(), name='fwe_thresh')
 
     # Thresholding - Cluster ############################################
     # cluster -i %s -c %s -t 3.2 -p 0.05 -d %s --volume=%s  \
     #     --othresh=thresh_cluster_fwe_zstat1 --connectivity=26 --mm
+    cluster = pe.Node(fsl.Cluster(
+            connectivity=26,
+            threshold=3.2,
+            pthreshold=0.05,
+            out_threshold_file=True,
+            out_index_file=True,
+            out_localmax_txt_file=True),
+        name='cluster')
+
+    ds_zraw = pe.Node(GroupDerivativesDataSink(
+        base_directory=str(output_dir), keep_dtype=False, suffix='zstat', sub='all'),
+        name='ds_zraw', run_without_submitting=True)
+    ds_zraw.inputs.source_file = bids_ref
+
+    ds_zfwe = pe.Node(GroupDerivativesDataSink(
+        base_directory=str(output_dir), keep_dtype=False, suffix='zstat',
+        desc='fwe', sub='all'), name='ds_zfwe', run_without_submitting=True)
+    ds_zfwe.inputs.source_file = bids_ref
+
+    ds_zclust = pe.Node(GroupDerivativesDataSink(
+        base_directory=str(output_dir), keep_dtype=False, suffix='zstat',
+        desc='clust', sub='all'), name='ds_zclust', run_without_submitting=True)
+    ds_zclust.inputs.source_file = bids_ref
+
+    ds_clustidx = pe.Node(GroupDerivativesDataSink(
+        base_directory=str(output_dir), keep_dtype=False, suffix='clusterindex', sub='all'),
+        name='ds_clustidx', run_without_submitting=True)
+    ds_clustidx.inputs.source_file = bids_ref
+
+    ds_clustlmax = pe.Node(GroupDerivativesDataSink(
+        base_directory=str(output_dir), keep_dtype=False, suffix='localmax',
+        desc='intask', sub='all'), name='ds_clustlmax', run_without_submitting=True)
+    ds_clustlmax.inputs.source_file = bids_ref
 
     workflow.connect([
         (inputnode, l2_model, [(('in_copes', _len), 'num_copes')]),
         (inputnode, flameo_ols, [('group_mask', 'mask_file')]),
+        (inputnode, smoothness, [('group_mask', 'mask_file'),
+                                 (('in_copes', _dof), 'dof')]),
+        (inputnode, merge_copes, [('in_copes', 'in_files')]),
+        (inputnode, merge_varcopes, [('in_varcopes', 'in_files')]),
+
         (l2_model, flameo_ols, [('design_mat', 'design_file'),
                                 ('design_con', 't_con_file'),
                                 ('design_grp', 'cov_split_file')]),
+        (merge_copes, flameo_ols, [('merged_file', 'cope_file')]),
+        (merge_varcopes, flameo_ols, [('merged_file', 'var_cope_file')]),
+        (flameo_ols, smoothness, [('res4d', 'residual_fit_file')]),
+        (flameo_ols, fwe_thresh, [('zstats', 'in_file')]),
+        (smoothness, fwe_ptoz, [('resels', 'resels')]),
+        (fwe_ptoz, fwe_thresh, [('zstat', 'thresh')]),
+        (flameo_ols, cluster, [('zstats', 'in_file')]),
+        (merge_copes, cluster, [('merged_file', 'cope_file')]),
+        (smoothness, cluster, [('volume', 'volume'),
+                               ('dlh', 'dlh')]),
+
+        (flameo_ols, ds_zraw, [('zstats', 'in_file')]),
+        (fwe_thresh, ds_zfwe, [('out_file', 'in_file')]),
+        (cluster, ds_zclust, [('threshold_file', 'in_file')]),
+        (cluster, ds_clustidx, [('index_file', 'in_file')]),
+        (cluster, ds_clustlmax, [('localmax_txt_file', 'in_file')]),
     ])
     return workflow
 
@@ -198,7 +268,13 @@ def _bids2nipypeinfo(in_file, events_file, regressors_file,
 
     if 'regressor_names' in bunch_fields:
         runinfo.regressor_names = regressors_names
-        runinfo.regressors = regress_data[regressors_names].fillna(0.0).values.T.tolist()
+        try:
+            runinfo.regressors = regress_data[regressors_names]
+        except KeyError:
+            regressors_names = list(set(regressors_names).intersection(
+                                    set(regress_data.columns)))
+            runinfo.regressors = regress_data[regressors_names]
+        runinfo.regressors = runinfo.regressors.fillna(0.0).values.T.tolist()
 
     return [runinfo], str(out_motion)
 
@@ -209,6 +285,10 @@ def _get_tr(in_dict):
 
 def _len(inlist):
     return len(inlist)
+
+
+def _dof(inlist):
+    return len(inlist) - 1
 
 
 def _dict_ds(in_dict, sub, order=['bold', 'mask', 'events', 'regressors', 'tr']):

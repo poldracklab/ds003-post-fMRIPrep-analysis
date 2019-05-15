@@ -36,7 +36,6 @@ ENV FSLDIR="/usr/share/fsl/5.0" \
     LD_LIBRARY_PATH="/usr/lib/fsl/5.0:$LD_LIBRARY_PATH" \
     FSLTCLSH="/usr/bin/tclsh" \
     FSLWISH="/usr/bin/wish"
-ENV PATH="/usr/lib/fsl/5.0:$PATH"
 
 # Create a shared $HOME directory
 RUN useradd -m -s /bin/bash -G users bidsapp
@@ -50,7 +49,7 @@ RUN curl -sSLO https://repo.continuum.io/miniconda/Miniconda3-4.5.11-Linux-x86_6
     rm Miniconda3-4.5.11-Linux-x86_64.sh
 
 # Set CPATH for packages relying on compiled libs (e.g. indexed_gzip)
-ENV PATH="/usr/local/miniconda/bin:$PATH" \
+ENV PATH="/usr/lib/fsl/5.0:/usr/local/miniconda/bin:$PATH" \
     CPATH="/usr/local/miniconda/include/:$CPATH" \
     LANG="C.UTF-8" \
     LC_ALL="C.UTF-8" \

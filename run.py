@@ -1,13 +1,24 @@
 #!/usr/bin/env python3
 import sys
 import logging
+import json
 from pathlib import Path
-from templateflow.api import templates as get_tpl_list
+from templateflow.api import get as tpl_get, templates as get_tpl_list
 
 __version__ = '1.0.0'
 logging.addLevelName(25, 'IMPORTANT')  # Add a new level between INFO and WARNING
 logging.addLevelName(15, 'VERBOSE')  # Add a new level between INFO and DEBUG
 logger = logging.getLogger('cli')
+
+
+metadata = {
+    'Name': 'ds003 example postprocessing',
+    'BIDSVersion': '1.1.1',
+    'PipelineDescription': {
+        'Name': 'ds003-post-fMRIPrep-analysis'
+    },
+    'CodeURL': 'https://github.com/poldracklab/ds003-post-fMRIPrep-analysis'
+}
 
 
 def get_parser():
@@ -163,15 +174,55 @@ def main():
         workflow.run(**plugin_settings)
 
     if 'group' in opts.analysis_level:
-        # glayout = BIDSLayout(str(bids_dir), validate=False, derivatives=str(output_dir))
-        # in_copes = glayout.get(
-        #     domains='derivatives',
-        #     suffix='statmap',
-        # )
+        from workflows import second_level_wf
+        import re
 
-        # group_out = output_dir / 'FSLAnalysis' / 'grp-all'
-        # group_out.mkdir(exist_ok=True, parents=True)
-        pass
+        output_dir = opts.output_dir.resolve()
+        metafile = '{}/FSLAnalysis/dataset_description.json'.format(output_dir)
+        with open(metafile, 'w') as metafile:
+            json.dump(metadata, metafile, indent=4)
+        glayout = BIDSLayout(str(bids_dir), validate=False, derivatives=str(output_dir))
+
+        base_entities = set(['subject', 'session', 'task', 'run', 'acquisition', 'reconstruction'])
+        in_copes = []
+        in_varcopes = []
+        for part in prepped_bold:
+            entities = part.entities
+            base = base_entities.intersection(entities)
+            subquery = {k: v for k, v in entities.items() if k in base}
+            in_copes.append(glayout.get(
+                domains='derivatives',
+                suffix='cope',
+                return_type='file',
+                extensions=['.nii', '.nii.gz'],
+                space=query['space'],
+                **subquery)[0])
+            in_varcopes.append(glayout.get(
+                domains='derivatives',
+                suffix='varcope',
+                return_type='file',
+                extensions=['.nii', '.nii.gz'],
+                space=query['space'],
+                **subquery)[0])
+        bids_ref = re.sub('sub-[0-9]+', 'sub-all', prepped_bold[0].path)
+
+        group_mask = tpl_get(entities['space'],
+                             resolution=2,
+                             desc='brain',
+                             suffix='mask')
+
+        group_out = output_dir / 'FSLAnalysis'
+        group_out.mkdir(exist_ok=True, parents=True)
+
+        workflow = second_level_wf(group_out, bids_ref)
+
+        # set inputs
+        workflow.inputs.inputnode.group_mask = str(group_mask)
+        workflow.inputs.inputnode.in_copes = in_copes
+        workflow.inputs.inputnode.in_varcopes = in_varcopes
+
+        workflow.base_dir = opts.work_dir
+        workflow.run(**plugin_settings)
 
     return 0
 
