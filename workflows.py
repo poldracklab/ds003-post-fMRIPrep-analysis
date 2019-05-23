@@ -149,22 +149,37 @@ def second_level_wf(output_dir, bids_ref, name='wf_2nd_level'):
     # Thresholding - FWE ################################################
     # smoothest -r %s -d %i -m %s
     smoothness = pe.Node(fsl.SmoothEstimate(), name='smoothness')
-    # ptoz 0.05 -g %f
-    fwe_ptoz = pe.Node(PtoZ(pvalue=0.05), name='fwe_ptoz')
-    # fslmaths %s -thr %s zstat1_thresh
-    fwe_thresh = pe.Node(fsl.Threshold(), name='fwe_thresh')
+    # ptoz 0.025 -g %f
+    # p = 0.05 / 2 for 2-tailed test
+    fwe_ptoz = pe.Node(PtoZ(pvalue=0.025), name='fwe_ptoz')
+    # fslmaths %s -uthr %s -thr %s nonsignificant
+    # fslmaths %s -sub nonsignificant zstat1_thresh
+    fwe_nonsig0 = pe.Node(fsl.Threshold(direction='above'), name='fwe_nonsig0')
+    fwe_nonsig1 = pe.Node(fsl.Threshold(direction='below'), name='fwe_nonsig1')
+    fwe_thresh = pe.Node(fsl.BinaryMaths(operation='sub'), name='fwe_thresh')
 
     # Thresholding - Cluster ############################################
-    # cluster -i %s -c %s -t 3.2 -p 0.05 -d %s --volume=%s  \
+    # cluster -i %s -c %s -t 3.2 -p 0.025 -d %s --volume=%s  \
     #     --othresh=thresh_cluster_fwe_zstat1 --connectivity=26 --mm
-    cluster = pe.Node(fsl.Cluster(
-            connectivity=26,
-            threshold=3.2,
-            pthreshold=0.05,
-            out_threshold_file=True,
-            out_index_file=True,
-            out_localmax_txt_file=True),
-        name='cluster')
+    cluster_kwargs = {
+        'connectivity': 26,
+        'threshold': 3.2,
+        'pthreshold': 0.025,
+        'out_threshold_file': True,
+        'out_index_file': True,
+        'out_localmax_txt_file': True
+    }
+    cluster_pos = pe.Node(fsl.Cluster(
+            **cluster_kwargs),
+        name='cluster_pos')
+    cluster_neg = pe.Node(fsl.Cluster(
+            **cluster_kwargs),
+        name='cluster_neg')
+    zstat_inv = pe.Node(fsl.BinaryMaths(operation='mul', operand_value=-1),
+                        name='zstat_inv')
+    cluster_inv = pe.Node(fsl.BinaryMaths(operation='mul', operand_value=-1),
+                          name='cluster_inv')
+    cluster_all = pe.Node(fsl.BinaryMaths(operation='add'), name='cluster_all')
 
     ds_zraw = pe.Node(GroupDerivativesDataSink(
         base_directory=str(output_dir), keep_dtype=False, suffix='zstat', sub='all'),
@@ -181,15 +196,25 @@ def second_level_wf(output_dir, bids_ref, name='wf_2nd_level'):
         desc='clust', sub='all'), name='ds_zclust', run_without_submitting=True)
     ds_zclust.inputs.source_file = bids_ref
 
-    ds_clustidx = pe.Node(GroupDerivativesDataSink(
-        base_directory=str(output_dir), keep_dtype=False, suffix='clusterindex', sub='all'),
-        name='ds_clustidx', run_without_submitting=True)
-    ds_clustidx.inputs.source_file = bids_ref
+    ds_clustidx_pos = pe.Node(GroupDerivativesDataSink(
+        base_directory=str(output_dir), keep_dtype=False, suffix='pclusterindex', sub='all'),
+        name='ds_clustidx_pos', run_without_submitting=True)
+    ds_clustidx_pos.inputs.source_file = bids_ref
 
-    ds_clustlmax = pe.Node(GroupDerivativesDataSink(
-        base_directory=str(output_dir), keep_dtype=False, suffix='localmax',
-        desc='intask', sub='all'), name='ds_clustlmax', run_without_submitting=True)
-    ds_clustlmax.inputs.source_file = bids_ref
+    ds_clustlmax_pos = pe.Node(GroupDerivativesDataSink(
+        base_directory=str(output_dir), keep_dtype=False, suffix='plocalmax',
+        desc='intask', sub='all'), name='ds_clustlmax_pos', run_without_submitting=True)
+    ds_clustlmax_pos.inputs.source_file = bids_ref
+
+    ds_clustidx_neg = pe.Node(GroupDerivativesDataSink(
+        base_directory=str(output_dir), keep_dtype=False, suffix='nclusterindex', sub='all'),
+        name='ds_clustidx_neg', run_without_submitting=True)
+    ds_clustidx_neg.inputs.source_file = bids_ref
+
+    ds_clustlmax_neg = pe.Node(GroupDerivativesDataSink(
+        base_directory=str(output_dir), keep_dtype=False, suffix='nlocalmax',
+        desc='intask', sub='all'), name='ds_clustlmax_neg', run_without_submitting=True)
+    ds_clustlmax_neg.inputs.source_file = bids_ref
 
     workflow.connect([
         (inputnode, l2_model, [(('in_copes', _len), 'num_copes')]),
@@ -205,19 +230,35 @@ def second_level_wf(output_dir, bids_ref, name='wf_2nd_level'):
         (merge_copes, flameo_ols, [('merged_file', 'cope_file')]),
         (merge_varcopes, flameo_ols, [('merged_file', 'var_cope_file')]),
         (flameo_ols, smoothness, [('res4d', 'residual_fit_file')]),
-        (flameo_ols, fwe_thresh, [('zstats', 'in_file')]),
+
+        (flameo_ols, fwe_nonsig0, [('zstats', 'in_file')]),
+        (fwe_nonsig0, fwe_nonsig1, [('out_file', 'in_file')]),
         (smoothness, fwe_ptoz, [('resels', 'resels')]),
-        (fwe_ptoz, fwe_thresh, [('zstat', 'thresh')]),
-        (flameo_ols, cluster, [('zstats', 'in_file')]),
-        (merge_copes, cluster, [('merged_file', 'cope_file')]),
-        (smoothness, cluster, [('volume', 'volume'),
-                               ('dlh', 'dlh')]),
+        (fwe_ptoz, fwe_nonsig0, [('zstat', 'thresh')]),
+        (fwe_ptoz, fwe_nonsig1, [(('zstat', _neg), 'thresh')]),
+        (flameo_ols, fwe_thresh, [('zstats', 'in_file')]),
+        (fwe_nonsig1, fwe_thresh, [('out_file', 'operand_file')]),
+
+        (flameo_ols, cluster_pos, [('zstats', 'in_file')]),
+        (merge_copes, cluster_pos, [('merged_file', 'cope_file')]),
+        (smoothness, cluster_pos, [('volume', 'volume'),
+                                   ('dlh', 'dlh')]),
+        (flameo_ols, zstat_inv, [('zstats', 'in_file')]),
+        (zstat_inv, cluster_neg, [('out_file', 'in_file')]),
+        (cluster_neg, cluster_inv, [('threshold_file', 'in_file')]),
+        (merge_copes, cluster_neg, [('merged_file', 'cope_file')]),
+        (smoothness, cluster_neg, [('volume', 'volume'),
+                                   ('dlh', 'dlh')]),
+        (cluster_pos, cluster_all, [('threshold_file', 'in_file')]),
+        (cluster_inv, cluster_all, [('out_file', 'operand_file')]),
 
         (flameo_ols, ds_zraw, [('zstats', 'in_file')]),
         (fwe_thresh, ds_zfwe, [('out_file', 'in_file')]),
-        (cluster, ds_zclust, [('threshold_file', 'in_file')]),
-        (cluster, ds_clustidx, [('index_file', 'in_file')]),
-        (cluster, ds_clustlmax, [('localmax_txt_file', 'in_file')]),
+        (cluster_all, ds_zclust, [('out_file', 'in_file')]),
+        (cluster_pos, ds_clustidx_pos, [('index_file', 'in_file')]),
+        (cluster_pos, ds_clustlmax_pos, [('localmax_txt_file', 'in_file')]),
+        (cluster_neg, ds_clustidx_neg, [('index_file', 'in_file')]),
+        (cluster_neg, ds_clustlmax_neg, [('localmax_txt_file', 'in_file')]),
     ])
     return workflow
 
@@ -289,6 +330,10 @@ def _len(inlist):
 
 def _dof(inlist):
     return len(inlist) - 1
+
+
+def _neg(val):
+    return -val
 
 
 def _dict_ds(in_dict, sub, order=['bold', 'mask', 'events', 'regressors', 'tr']):
