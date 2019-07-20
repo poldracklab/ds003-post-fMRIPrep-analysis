@@ -166,6 +166,7 @@ def main():
                 domains='derivatives',
                 suffix='regressors',
                 return_type='file',
+                extensions=['.tsv'],
                 **subquery)[0]
             inputs[sub]['tr'] = part.metadata.get('RepetitionTime')
 
