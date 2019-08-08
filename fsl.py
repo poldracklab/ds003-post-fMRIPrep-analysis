@@ -1,13 +1,20 @@
 """
-Analysis workflows
+Analysis workflows (FSL) for ds000109.
+
+This script replicates, using three distinct software pipelines, the contrast shown in
+figure 5 of https://www.jneurosci.org/content/32/16/5553 ; which compare two task conditions
+over two age groups (young / old and false-belief / false-photo)
+
 """
 
+# General Set up ###
 from nipype.pipeline import engine as pe
 from nipype.algorithms.modelgen import SpecifyModel
 from nipype.interfaces import fsl, utility as niu, io as nio
 from nipype.workflows.fmri.fsl.preprocess import create_susan_smooth
 from niworkflows.interfaces.bids import DerivativesDataSink as BIDSDerivatives
 from interfaces import PtoZ
+from .utils import _dict_ds, _bids2nipypeinfo, _len, _dof, _neg
 
 
 DATA_ITEMS = ['bold', 'mask', 'events', 'regressors', 'tr']
@@ -18,10 +25,18 @@ class DerivativesDataSink(BIDSDerivatives):
 
 
 class GroupDerivativesDataSink(BIDSDerivatives):
-    out_path_base = 'grp_all'
+    out_path_base = 'FSL-all'
 
 
-def first_level_wf(in_files, output_dir, fwhm=6.0, name='wf_1st_level'):
+def first_level_wf(in_files, output_dir, fwhm=6.0, name='fsl_1st_level'):
+    """
+    Creates the first level of analysis (individual participants,
+    concatenating runs).
+
+    We aim to reproduce 2 contrast maps. The first is for "young" subjects,
+    and the second "old" subjects.
+    Both are the same contrast, false_belief_story vs. false_belief_photo
+    """
     workflow = pe.Workflow(name=name)
 
     datasource = pe.Node(niu.Function(function=_dict_ds, output_names=DATA_ITEMS),
@@ -39,10 +54,12 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, name='wf_1st_level'):
     runinfo.inputs.regressors_names = ['dvars', 'framewise_displacement'] + \
         ['a_comp_cor_%02d' % i for i in range(6)] + ['cosine%02d' % i for i in range(4)]
 
-    # SUSAN smoothing
+    # Preprocessing fMRIPrep is reluctant to do: SUSAN smoothing
     susan = create_susan_smooth()
     susan.inputs.inputnode.fwhm = fwhm
 
+    # l1_spec adapts the "Info" dictionary from BIDS2info to the
+    # FSL tooling.
     l1_spec = pe.Node(SpecifyModel(
         parameter_source='FSL',
         input_units='secs',
@@ -53,8 +70,9 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, name='wf_1st_level'):
     l1_model = pe.Node(fsl.Level1Design(
         bases={'dgamma': {'derivs': True}},
         model_serial_correlations=True,
-        contrasts=[('intask', 'T', ['word', 'pseudoword'], [1, 1])],
-        # orthogonalization=orthogonality,
+        contrasts=[('story_v_photo', 'T',
+                    ['false_belief_story', 'false_belief_photo'],
+                    [1, -1])],
     ), name='l1_model')
 
     # feat_spec generates an fsf model specification file
@@ -72,20 +90,21 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, name='wf_1st_level'):
 
     ds_cope = pe.Node(DerivativesDataSink(
         base_directory=str(output_dir), keep_dtype=False, suffix='cope',
-        desc='intask'), name='ds_cope', run_without_submitting=True)
+        desc='storyvsphoto'), name='ds_cope', run_without_submitting=True)
 
     ds_varcope = pe.Node(DerivativesDataSink(
         base_directory=str(output_dir), keep_dtype=False, suffix='varcope',
-        desc='intask'), name='ds_varcope', run_without_submitting=True)
+        desc='storyvsphoto'), name='ds_varcope', run_without_submitting=True)
 
     ds_zstat = pe.Node(DerivativesDataSink(
         base_directory=str(output_dir), keep_dtype=False, suffix='zstat',
-        desc='intask'), name='ds_zstat', run_without_submitting=True)
+        desc='storyvsphoto'), name='ds_zstat', run_without_submitting=True)
 
     ds_tstat = pe.Node(DerivativesDataSink(
         base_directory=str(output_dir), keep_dtype=False, suffix='tstat',
-        desc='intask'), name='ds_tstat', run_without_submitting=True)
+        desc='storyvsphoto'), name='ds_tstat', run_without_submitting=True)
 
+    # Connect up the workflow
     workflow.connect([
         (datasource, susan, [('bold', 'inputnode.in_files'),
                              ('mask', 'inputnode.mask_file')]),
@@ -131,20 +150,10 @@ def second_level_wf(output_dir, bids_ref, name='wf_2nd_level'):
 
     # Configure FSL 2nd level analysis
     l2_model = pe.Node(fsl.L2Model(), name='l2_model')
-    flameo_ols = pe.Node(fsl.FLAMEO(run_mode='ols'), name='flameo_ols')
+    flameo = pe.Node(fsl.FLAMEO(run_mode='flame12'), name='flameo')
 
     merge_copes = pe.Node(fsl.Merge(dimension='t'), name='merge_copes')
     merge_varcopes = pe.Node(fsl.Merge(dimension='t'), name='merge_varcopes')
-
-    # Thresholding - FDR ################################################
-    # Calculate pvalues with ztop
-    fdr_ztop = pe.Node(fsl.ImageMaths(op_string='-ztop', suffix='_pval'),
-                       name='fdr_ztop')
-    # Find FDR threshold: fdr -i zstat1_pval -m <group_mask> -q 0.05
-    # fdr_th = <write Nipype interface for fdr>
-    # Apply threshold:
-    # fslmaths zstat1_pval -mul -1 -add 1 -thr <fdr_th> -mas <group_mask> \
-    #     zstat1_thresh_vox_fdr_pstat1
 
     # Thresholding - FWE ################################################
     # smoothest -r %s -d %i -m %s
@@ -169,12 +178,10 @@ def second_level_wf(output_dir, bids_ref, name='wf_2nd_level'):
         'out_index_file': True,
         'out_localmax_txt_file': True
     }
-    cluster_pos = pe.Node(fsl.Cluster(
-            **cluster_kwargs),
-        name='cluster_pos')
-    cluster_neg = pe.Node(fsl.Cluster(
-            **cluster_kwargs),
-        name='cluster_neg')
+    cluster_pos = pe.Node(fsl.Cluster(**cluster_kwargs),
+                          name='cluster_pos')
+    cluster_neg = pe.Node(fsl.Cluster(**cluster_kwargs),
+                          name='cluster_neg')
     zstat_inv = pe.Node(fsl.BinaryMaths(operation='mul', operand_value=-1),
                         name='zstat_inv')
     cluster_inv = pe.Node(fsl.BinaryMaths(operation='mul', operand_value=-1),
@@ -203,7 +210,7 @@ def second_level_wf(output_dir, bids_ref, name='wf_2nd_level'):
 
     ds_clustlmax_pos = pe.Node(GroupDerivativesDataSink(
         base_directory=str(output_dir), keep_dtype=False, suffix='plocalmax',
-        desc='intask', sub='all'), name='ds_clustlmax_pos', run_without_submitting=True)
+        desc='storyvsphoto', sub='all'), name='ds_clustlmax_pos', run_without_submitting=True)
     ds_clustlmax_pos.inputs.source_file = bids_ref
 
     ds_clustidx_neg = pe.Node(GroupDerivativesDataSink(
@@ -213,37 +220,37 @@ def second_level_wf(output_dir, bids_ref, name='wf_2nd_level'):
 
     ds_clustlmax_neg = pe.Node(GroupDerivativesDataSink(
         base_directory=str(output_dir), keep_dtype=False, suffix='nlocalmax',
-        desc='intask', sub='all'), name='ds_clustlmax_neg', run_without_submitting=True)
+        desc='storyvsphoto', sub='all'), name='ds_clustlmax_neg', run_without_submitting=True)
     ds_clustlmax_neg.inputs.source_file = bids_ref
 
     workflow.connect([
         (inputnode, l2_model, [(('in_copes', _len), 'num_copes')]),
-        (inputnode, flameo_ols, [('group_mask', 'mask_file')]),
+        (inputnode, flameo, [('group_mask', 'mask_file')]),
         (inputnode, smoothness, [('group_mask', 'mask_file'),
                                  (('in_copes', _dof), 'dof')]),
         (inputnode, merge_copes, [('in_copes', 'in_files')]),
         (inputnode, merge_varcopes, [('in_varcopes', 'in_files')]),
 
-        (l2_model, flameo_ols, [('design_mat', 'design_file'),
-                                ('design_con', 't_con_file'),
-                                ('design_grp', 'cov_split_file')]),
-        (merge_copes, flameo_ols, [('merged_file', 'cope_file')]),
-        (merge_varcopes, flameo_ols, [('merged_file', 'var_cope_file')]),
-        (flameo_ols, smoothness, [('res4d', 'residual_fit_file')]),
+        (l2_model, flameo, [('design_mat', 'design_file'),
+                            ('design_con', 't_con_file'),
+                            ('design_grp', 'cov_split_file')]),
+        (merge_copes, flameo, [('merged_file', 'cope_file')]),
+        (merge_varcopes, flameo, [('merged_file', 'var_cope_file')]),
+        (flameo, smoothness, [('res4d', 'residual_fit_file')]),
 
-        (flameo_ols, fwe_nonsig0, [('zstats', 'in_file')]),
+        (flameo, fwe_nonsig0, [('zstats', 'in_file')]),
         (fwe_nonsig0, fwe_nonsig1, [('out_file', 'in_file')]),
         (smoothness, fwe_ptoz, [('resels', 'resels')]),
         (fwe_ptoz, fwe_nonsig0, [('zstat', 'thresh')]),
         (fwe_ptoz, fwe_nonsig1, [(('zstat', _neg), 'thresh')]),
-        (flameo_ols, fwe_thresh, [('zstats', 'in_file')]),
+        (flameo, fwe_thresh, [('zstats', 'in_file')]),
         (fwe_nonsig1, fwe_thresh, [('out_file', 'operand_file')]),
 
-        (flameo_ols, cluster_pos, [('zstats', 'in_file')]),
+        (flameo, cluster_pos, [('zstats', 'in_file')]),
         (merge_copes, cluster_pos, [('merged_file', 'cope_file')]),
         (smoothness, cluster_pos, [('volume', 'volume'),
                                    ('dlh', 'dlh')]),
-        (flameo_ols, zstat_inv, [('zstats', 'in_file')]),
+        (flameo, zstat_inv, [('zstats', 'in_file')]),
         (zstat_inv, cluster_neg, [('out_file', 'in_file')]),
         (cluster_neg, cluster_inv, [('threshold_file', 'in_file')]),
         (merge_copes, cluster_neg, [('merged_file', 'cope_file')]),
@@ -252,7 +259,7 @@ def second_level_wf(output_dir, bids_ref, name='wf_2nd_level'):
         (cluster_pos, cluster_all, [('threshold_file', 'in_file')]),
         (cluster_inv, cluster_all, [('out_file', 'operand_file')]),
 
-        (flameo_ols, ds_zraw, [('zstats', 'in_file')]),
+        (flameo, ds_zraw, [('zstats', 'in_file')]),
         (fwe_thresh, ds_zfwe, [('out_file', 'in_file')]),
         (cluster_all, ds_zclust, [('out_file', 'in_file')]),
         (cluster_pos, ds_clustidx_pos, [('index_file', 'in_file')]),
@@ -261,80 +268,3 @@ def second_level_wf(output_dir, bids_ref, name='wf_2nd_level'):
         (cluster_neg, ds_clustlmax_neg, [('localmax_txt_file', 'in_file')]),
     ])
     return workflow
-
-
-def _bids2nipypeinfo(in_file, events_file, regressors_file,
-                     regressors_names=None,
-                     motion_columns=None,
-                     decimals=3, amplitude=1.0):
-    from pathlib import Path
-    import numpy as np
-    import pandas as pd
-    from nipype.interfaces.base.support import Bunch
-
-    # Process the events file
-    events = pd.read_csv(events_file, sep=r'\s+')
-
-    bunch_fields = ['onsets', 'durations', 'amplitudes']
-
-    if not motion_columns:
-        from itertools import product
-        motion_columns = ['_'.join(v) for v in product(('trans', 'rot'), 'xyz')]
-
-    out_motion = Path('motion.par').resolve()
-
-    regress_data = pd.read_csv(regressors_file, sep=r'\s+')
-    np.savetxt(out_motion, regress_data[motion_columns].values, '%g')
-    if regressors_names is None:
-        regressors_names = sorted(set(regress_data.columns) - set(motion_columns))
-
-    if regressors_names:
-        bunch_fields += ['regressor_names']
-        bunch_fields += ['regressors']
-
-    runinfo = Bunch(
-        scans=in_file,
-        conditions=list(set(events.trial_type.values)),
-        **{k: [] for k in bunch_fields})
-
-    for condition in runinfo.conditions:
-        event = events[events.trial_type.str.match(condition)]
-
-        runinfo.onsets.append(np.round(event.onset.values, 3).tolist())
-        runinfo.durations.append(np.round(event.duration.values, 3).tolist())
-        if 'amplitudes' in events.columns:
-            runinfo.amplitudes.append(np.round(event.amplitudes.values, 3).tolist())
-        else:
-            runinfo.amplitudes.append([amplitude] * len(event))
-
-    if 'regressor_names' in bunch_fields:
-        runinfo.regressor_names = regressors_names
-        try:
-            runinfo.regressors = regress_data[regressors_names]
-        except KeyError:
-            regressors_names = list(set(regressors_names).intersection(
-                                    set(regress_data.columns)))
-            runinfo.regressors = regress_data[regressors_names]
-        runinfo.regressors = runinfo.regressors.fillna(0.0).values.T.tolist()
-
-    return [runinfo], str(out_motion)
-
-
-def _get_tr(in_dict):
-    return in_dict.get('RepetitionTime')
-
-
-def _len(inlist):
-    return len(inlist)
-
-
-def _dof(inlist):
-    return len(inlist) - 1
-
-
-def _neg(val):
-    return -val
-
-
-def _dict_ds(in_dict, sub, order=['bold', 'mask', 'events', 'regressors', 'tr']):
-    return tuple([in_dict[sub][k] for k in order])
