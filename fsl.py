@@ -70,7 +70,7 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, name='fsl_1st_level'):
     l1_model = pe.Node(fsl.Level1Design(
         bases={'dgamma': {'derivs': True}},
         model_serial_correlations=True,
-        contrasts=[('story_v_photo', 'T',
+        contrasts=[('story>photo', 'T',
                     ['false_belief_story', 'false_belief_photo'],
                     [1, -1])],
     ), name='l1_model')
