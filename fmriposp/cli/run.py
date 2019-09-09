@@ -5,10 +5,10 @@ import json
 from pathlib import Path
 from templateflow.api import get as tpl_get, templates as get_tpl_list
 
-__version__ = '1.0.0'
+
 logging.addLevelName(25, 'IMPORTANT')  # Add a new level between INFO and WARNING
 logging.addLevelName(15, 'VERBOSE')  # Add a new level between INFO and DEBUG
-logger = logging.getLogger('cli')
+logger = logging.getLogger('workflow')
 
 
 metadata = {
@@ -25,6 +25,7 @@ def get_parser():
     """Define the command line interface"""
     from argparse import ArgumentParser
     from argparse import RawTextHelpFormatter
+    from .. import __version__
 
     parser = ArgumentParser(description='DS000003 Analysis Workflow',
                             formatter_class=RawTextHelpFormatter)
@@ -116,9 +117,11 @@ def main():
 
     # Get absolute path to BIDS directory
     bids_dir = opts.bids_dir.resolve()
-    layout = BIDSLayout(str(bids_dir), validate=False, derivatives=str(derivatives_dir))
+    layout = BIDSLayout(str(bids_dir), validate=False,
+                        ignore=['.git', '.gitattributes', '.datalad'],
+                        derivatives=str(derivatives_dir))
     query = {'domains': 'derivatives', 'desc': 'preproc',
-             'suffix': 'bold', 'extensions': ['.nii', '.nii.gz']}
+             'suffix': 'bold', 'extension': ['.nii', '.nii.gz']}
 
     if opts.participant_label:
         query['subject'] = '|'.join(opts.participant_label)
@@ -139,7 +142,7 @@ def main():
 
     # The magic happens here
     if 'participant' in opts.analysis_level:
-        from workflows import first_level_wf
+        from ..workflows.fsl import first_level_wf
 
         output_dir = opts.output_dir.resolve()
         output_dir.mkdir(exist_ok=True, parents=True)
@@ -149,6 +152,7 @@ def main():
         for part in prepped_bold:
             entities = part.entities
             sub = entities['subject']
+            logger.info('Gathering preprocessed data for subject %s', sub)
             inputs[sub] = {}
             base = base_entities.intersection(entities)
             subquery = {k: v for k, v in entities.items() if k in base}
@@ -157,25 +161,25 @@ def main():
                 domains='derivatives',
                 suffix='mask',
                 return_type='file',
-                extensions=['.nii', '.nii.gz'],
+                extension=['.nii', '.nii.gz'],
                 space=query['space'],
-                **subquery)[0]
+                **subquery)
             inputs[sub]['events'] = layout.get(
                 suffix='events', return_type='file', **subquery)[0]
             inputs[sub]['regressors'] = layout.get(
                 domains='derivatives',
                 suffix='regressors',
                 return_type='file',
-                extensions=['.tsv'],
-                **subquery)[0]
-            inputs[sub]['tr'] = part.metadata.get('RepetitionTime')
+                extension=['.tsv'],
+                **subquery)
+            inputs[sub]['tr'] = part.get_metadata().get('RepetitionTime', 1.0)
 
         workflow = first_level_wf(inputs, output_dir)
         workflow.base_dir = opts.work_dir
         workflow.run(**plugin_settings)
 
     if 'group' in opts.analysis_level:
-        from workflows import second_level_wf
+        from ..workflows.fsl import second_level_wf
         import re
 
         output_dir = opts.output_dir.resolve()
@@ -195,14 +199,14 @@ def main():
                 domains='derivatives',
                 suffix='cope',
                 return_type='file',
-                extensions=['.nii', '.nii.gz'],
+                extension=['.nii', '.nii.gz'],
                 space=query['space'],
                 **subquery)[0])
             in_varcopes.append(glayout.get(
                 domains='derivatives',
                 suffix='varcope',
                 return_type='file',
-                extensions=['.nii', '.nii.gz'],
+                extension=['.nii', '.nii.gz'],
                 space=query['space'],
                 **subquery)[0])
         bids_ref = re.sub('sub-[0-9]+', 'sub-all', prepped_bold[0].path)
