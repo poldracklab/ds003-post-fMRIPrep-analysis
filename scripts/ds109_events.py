@@ -28,13 +28,23 @@ if __name__ == '__main__':
     #create a duplicate of the input file with the extension .bak as a backup ;)
     opts.in_file.rename('%s.bak' % opts.in_file)
 
+    #create a data frame including only the rows that have trial type names
+    #this dataframe contains the event names their onsets and durations.
     tt_names = original_df[~original_df.trial_type.isnull()]
+
+    #replace spaces in trial type names with underscores
+    tt_names["trial_type"] = tt_names.trial_type.str.replace(' ','_')
+
+    #create a data frame out of the rows that have no trial type name
     working_df = original_df[original_df.trial_type.isnull()]
 
     #if the input file is for run 2, convert it to run 1 format
     if 'run-02' in opts.in_file:
         working_df = run2processing(working_df)
 
+    #set the index to the working_df to the onset column, which will allow
+    #the magic function below to identify the row corresponding to the onset
+    #of each event.
     working_df = working_df[working_df.trial_type.isnull()].set_index('onset')
 
     #this is where the magic happens
