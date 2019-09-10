@@ -38,11 +38,15 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, name='afni_1st_level'):
     datasource.inputs.in_dict = in_files
     datasource.iterables = ('sub', sorted(in_files.keys()))
 
-    # Preprocessing fMRIPrep is reluctant to do: Smoothing using AFNI's 3dmerge tool. 
-    # This is the same smoothing tool preferred by the afni_proc.py which AFNI 
-    # recommends that analysts use to prepare their pipelines.
-    smoothing = pe.Node(afni.Merge(
-    	blurfwhm=fwhm
+    # Preprocessing fMRIPrep is reluctant to do: Smoothing using AFNI's 3dBlurToFWHM tool. 
+    # This is the most sophistcated smoothing tool in AFNI. It iteratively blurs
+    # the data until the desired smoothness (set by the FWHM) is reached.
+    # Documentation: 
+    # https://afni.nimh.nih.gov/pub/dist/doc/htmldoc/programs/3dBlurToFWHM_sphx.html 
+    smoothing = pe.Node(afni.BlurToFWHM(
+    	fwhm=fwhm,
+    	outputtype='AFNI',
+    	automask='True'
     ), name='smoothing')
 
     # Use 3dDeconvolve to set up the design matrix file required by 3dRemlFit
@@ -86,3 +90,19 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, name='afni_1st_level'):
     		('wherr_file', ...),])
     ])
     return workflow
+
+def second_level_wf(in_files, out_files, name='afni_2nd_level')
+    
+    workflow = pe.Workflow(name=name)
+    
+    ###
+    
+    mema = pe.Node(afni.mema(
+        sets = [('Contrast'), [
+        ('Sub-01', 'Sub-01..betas', 'Sub-01...tvals'),
+        (...), ...]],
+        mask = ...,
+        missing_data = 0
+    ), name='mixedeffects')
+
+
