@@ -71,7 +71,7 @@ def run2processing(working_df):
     """
 
     #define baseline_onset as the lowest value in the onset column of the data frame
-    baseline_onset = working_df.iloc[working_df["onset"].idxmin()]["onset"]
+    baseline_onset = working_df.onset.values.min()
 
     #subtract the baseline onset from the entire onset column
     working_df["onset"] = working_df["onset"].values - baseline_onset
