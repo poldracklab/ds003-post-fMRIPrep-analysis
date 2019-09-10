@@ -59,7 +59,6 @@ def main():
                 working_df.loc[onset:end, 'trial_type'] = tt
 
     working_df[working_df.trial_type == 0.0] = nan
-
     working_df.to_csv(opts.in_file, sep='\t', na_rep='n/a')
 
 
@@ -74,14 +73,11 @@ def run2processing(working_df):
     #define baseline_onset as the lowest value in the onset column of the data frame
     baseline_onset = working_df.iloc[working_df["onset"].idxmin()]["onset"]
 
-    #create a duplicate of working_df to mutate
-    run2_df = working_df
-
     #subtract the baseline onset from the entire onset column
-    run2_df["onset"] = working_df["onset"] - baseline_onset
+    working_df["onset"] = working_df["onset"].values - baseline_onset
 
     #return mutated dataframe
-    return run2_df
+    return working_df
 
 
 if __name__ == '__main__':
