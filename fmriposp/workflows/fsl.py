@@ -13,7 +13,7 @@ from nipype.algorithms.modelgen import SpecifyModel
 from nipype.interfaces import fsl, utility as niu, io as nio
 from nipype.workflows.fmri.fsl.preprocess import create_susan_smooth
 from niworkflows.interfaces.bids import DerivativesDataSink as BIDSDerivatives
-from interfaces import PtoZ
+from ..interfaces import PtoZ
 from .utils import _dict_ds, _bids2nipypeinfo, _len, _dof, _neg
 
 
@@ -28,7 +28,7 @@ class GroupDerivativesDataSink(BIDSDerivatives):
     out_path_base = 'FSL-all'
 
 
-def first_level_wf(in_files, output_dir, fwhm=6.0, name='fsl_1st_level'):
+def participant_level_wf(in_files, output_dir, fwhm=6.0, name='fsl_1st_level'):
     """
     Creates the first level of analysis (individual participants,
     concatenating runs).
@@ -46,7 +46,7 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, name='fsl_1st_level'):
 
     # Extract motion parameters from regressors file
     runinfo = pe.Node(niu.Function(
-        input_names=['in_file', 'events_file', 'regressors_file', 'regressors_names'],
+        input_names=['in_file', 'events_file', 'confounds_file', 'regressors_names'],
         function=_bids2nipypeinfo, output_names=['info', 'realign_file']),
         name='runinfo')
 
@@ -71,7 +71,7 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, name='fsl_1st_level'):
         bases={'dgamma': {'derivs': True}},
         model_serial_correlations=True,
         contrasts=[('story>photo', 'T',
-                    ['false_belief_story', 'false_belief_photo'],
+                    ['false_belief_story', 'false_photo_story'],
                     [1, -1])],
     ), name='l1_model')
 
@@ -110,7 +110,7 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, name='fsl_1st_level'):
                              ('mask', 'inputnode.mask_file')]),
         (datasource, runinfo, [
             ('events', 'events_file'),
-            ('regressors', 'regressors_file')]),
+            ('regressors', 'confounds_file')]),
         (susan, l1_spec, [('outputnode.smoothed_files', 'functional_runs')]),
         (datasource, l1_spec, [('tr', 'time_repetition')]),
         (datasource, l1_model, [('tr', 'interscan_interval')]),
@@ -136,7 +136,64 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, name='fsl_1st_level'):
     return workflow
 
 
-def second_level_wf(output_dir, bids_ref, name='wf_2nd_level'):
+def run_level_wf(output_dir, name='fsl_1b_level'):
+    """Build a second level analysis to aggregate runs of the same participant."""
+    workflow = pe.Workflow(name=name)
+
+    inputnode = pe.Node(niu.IdentityInterface(
+        fields=['group_mask', 'in_copes', 'in_varcopes']),
+        name='inputnode')
+
+    outputnode = pe.Node(niu.IdentityInterface(
+        fields=['out_copes', 'out_varcopes']),
+        name='outputnode')
+
+    merge_copes = pe.Node(fsl.Merge(dimension='t'), name='merge_copes')
+    merge_varcopes = pe.Node(fsl.Merge(dimension='t'), name='merge_varcopes')
+
+    # Configure FSL 2nd level analysis
+    l2_model = pe.Node(fsl.L2Model(), name='l2_model')
+    flameo = pe.Node(fsl.FLAMEO(run_mode='flame12'), name='flameo')
+
+    ds_cope = pe.Node(DerivativesDataSink(
+        base_directory=str(output_dir), keep_dtype=False, suffix='cope',
+        desc='storyvsphoto'), name='ds_cope', run_without_submitting=True)
+
+    ds_varcope = pe.Node(DerivativesDataSink(
+        base_directory=str(output_dir), keep_dtype=False, suffix='varcope',
+        desc='storyvsphoto'), name='ds_varcope', run_without_submitting=True)
+
+    ds_zstat = pe.Node(DerivativesDataSink(
+        base_directory=str(output_dir), keep_dtype=False, suffix='zstat',
+        desc='storyvsphoto'), name='ds_zstat', run_without_submitting=True)
+
+    ds_tstat = pe.Node(DerivativesDataSink(
+        base_directory=str(output_dir), keep_dtype=False, suffix='tstat',
+        desc='storyvsphoto'), name='ds_tstat', run_without_submitting=True)
+
+    workflow.connect([
+        (inputnode, l2_model, [(('in_copes', _len), 'num_copes')]),
+        (inputnode, flameo, [('group_mask', 'mask_file')]),
+        (inputnode, merge_copes, [('in_copes', 'in_files')]),
+        (inputnode, merge_varcopes, [('in_varcopes', 'in_files')]),
+
+        (l2_model, flameo, [('design_mat', 'design_file'),
+                            ('design_con', 't_con_file'),
+                            ('design_grp', 'cov_split_file')]),
+        (merge_copes, flameo, [('merged_file', 'cope_file')]),
+        (merge_varcopes, flameo, [('merged_file', 'var_cope_file')]),
+        (flameo, ds_cope, [('copes', 'in_file')]),
+        (flameo, ds_varcope, [('var_copes', 'in_file')]),
+        (flameo, ds_zstat, [('zstats', 'in_file')]),
+        (flameo, ds_tstat, [('tstats', 'in_file')]),
+        (flameo, outputnode, [('copes', 'out_copes')]),
+        (flameo, outputnode, [('var_copes', 'out_varcopes')]),
+    ])
+
+    return workflow
+
+
+def group_level_wf(output_dir, bids_ref, name='wf_2nd_level'):
     workflow = pe.Workflow(name=name)
 
     inputnode = pe.Node(niu.IdentityInterface(

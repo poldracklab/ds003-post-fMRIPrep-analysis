@@ -124,15 +124,13 @@ def main():
              'suffix': 'bold', 'extension': ['.nii', '.nii.gz']}
 
     if opts.participant_label:
-        query['subject'] = '|'.join(opts.participant_label)
+        query['subject'] = opts.participant_label
     if opts.run:
-        query['run'] = '|'.join(opts.run)
+        query['run'] = opts.run
     if opts.task:
-        query['task'] = '|'.join(opts.task)
+        query['task'] = opts.task
     if opts.space:
         query['space'] = opts.space
-        if opts.space == 'template':
-            query['space'] = '|'.join(get_tpl_list())
 
     # Preprocessed files that are input to the workflow
     prepped_bold = layout.get(**query)
@@ -142,7 +140,7 @@ def main():
 
     # The magic happens here
     if 'participant' in opts.analysis_level:
-        from ..workflows.fsl import first_level_wf
+        from ..workflows.fsl import participant_level_wf
 
         output_dir = opts.output_dir.resolve()
         output_dir.mkdir(exist_ok=True, parents=True)
@@ -172,14 +170,14 @@ def main():
                 return_type='file',
                 extension=['.tsv'],
                 **subquery)
-            inputs[sub]['tr'] = part.get_metadata().get('RepetitionTime', 1.0)
+            inputs[sub]['tr'] = part.get_metadata()['RepetitionTime']
 
-        workflow = first_level_wf(inputs, output_dir)
+        workflow = participant_level_wf(inputs, output_dir)
         workflow.base_dir = opts.work_dir
         workflow.run(**plugin_settings)
 
     if 'group' in opts.analysis_level:
-        from ..workflows.fsl import second_level_wf
+        from ..workflows.fsl import group_level_wf
         import re
 
         output_dir = opts.output_dir.resolve()
@@ -219,7 +217,7 @@ def main():
         group_out = output_dir / 'FSLAnalysis'
         group_out.mkdir(exist_ok=True, parents=True)
 
-        workflow = second_level_wf(group_out, bids_ref)
+        workflow = group_level_wf(group_out, bids_ref)
 
         # set inputs
         workflow.inputs.inputnode.group_mask = str(group_mask)

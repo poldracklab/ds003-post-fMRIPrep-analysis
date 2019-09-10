@@ -41,7 +41,7 @@ def _bids2nipypeinfo(
     from nipype.interfaces.base.support import Bunch
 
     # Process the events tsv file -- see BIDS
-    events = pd.read_csv(events_file, sep='\t')
+    events = pd.read_csv(events_file, sep='\t', dtype={'trial_type': str})
 
     events_cols = ['onsets', 'durations', 'amplitudes']
     if events_cols is not None:
@@ -54,6 +54,10 @@ def _bids2nipypeinfo(
 
     # Reads motion.par file and extracts its abso lute path. This is specific for FSL.
     out_motion = Path('motion.par').resolve()
+
+    # TODO: allow for a list of confounds files.
+    if isinstance(confounds_file, list):
+        confounds_file = confounds_file[0]
 
     # Process the regressor tsv file -- see BIDS derivatives
     confound_data = pd.read_csv(confounds_file, sep='\t')
@@ -73,14 +77,16 @@ def _bids2nipypeinfo(
         events_cols += ['regressors']
 
     # Extract their names and make sure your trial types do not contain spaces
-    condition_names = [tt.replace(' ', '_')
-                       for tt in set(events.trial_type.values)]
+    events['trial_type'] = events.trial_type.fillna('n/a')
+    events['trial_type'] = events.trial_type.str.replace(' ', '_')
+    condition_names = set(events.trial_type.dropna().values)
+    condition_names.discard('n/a')
 
     # A Bunch is a data structure that allows to access attributes as properties:
     # e.g., runinfo.scans.
     # NiPype requires to be fed Bunches for the modeling interfaces
     runinfo = Bunch(scans=in_file,
-                    conditions=condition_names,
+                    conditions=sorted(condition_names),
                     **{k: [] for k in events_cols})
 
     for condition in runinfo.conditions:

@@ -84,9 +84,14 @@ RUN python -c "from matplotlib import font_manager" && \
     sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
 
 # Installing dev requirements (packages that are not in pypi)
-WORKDIR /src/
-COPY requirements.txt requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+WORKDIR /src/fmriposp
+
+ARG VERSION
+# Force static versioning within container
+COPY . /src/fmriposp
+RUN echo "${VERSION}" > /src/fmriposp/fmriposp/VERSION && \
+    echo "include fmriposp/VERSION" >> /src/fmriposp/MANIFEST.in && \
+    pip install --no-cache-dir "/src/fmriposp[all]"
 
 # Replace FSL's imglob (which is Python 2)
 RUN rm -f /usr/share/fsl/5.0/bin/imglob && \
@@ -96,10 +101,6 @@ RUN rm -f /usr/share/fsl/5.0/bin/imglob && \
 RUN find $HOME -type d -exec chmod go=u {} + && \
     find $HOME -type f -exec chmod go=u {} +
 
-# Installing this module
-COPY . /src/
-ENV PYTHONPATH="/src:$PYTHONPATH"
-
 RUN ldconfig
 WORKDIR /tmp/
-ENTRYPOINT ["/src/run.py"]
+ENTRYPOINT ["/usr/local/miniconda/bin/fmriposp"]
