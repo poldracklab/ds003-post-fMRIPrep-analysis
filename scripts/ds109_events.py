@@ -1,12 +1,15 @@
+"""
+Transform ds000109 events files into a format that is easily readable.
+
+By our primary analysis scripts. Run 1 and Run 2 events files are differently formatted
+So a subfunction was defined to convert Run 2 files into the Run 1 format
+
+"""
 from pathlib import Path
 from numpy import nan
 import pandas as pd
 
-#This script transforms ds000109 events files into a format that is easily readable
-#By our primary analysis scripts. Run 1 and Run 2 events files are differently formatted
-#So a subfunction was defined to convert Run 2 files into the Run 1 format
-
-if __name__ == '__main__':
+def main():
     from argparse import ArgumentParser
     from argparse import RawTextHelpFormatter
 
@@ -30,7 +33,7 @@ if __name__ == '__main__':
 
     #create a data frame including only the rows that have trial type names
     #this dataframe contains the event names their onsets and durations.
-    tt_names = original_df[~original_df.trial_type.isnull()]
+    tt_names = original_df.loc[~original_df.trial_type.isnull()]
 
     #replace spaces in trial type names with underscores
     tt_names["trial_type"] = tt_names.trial_type.str.replace(' ','_')
@@ -39,7 +42,7 @@ if __name__ == '__main__':
     working_df = original_df[original_df.trial_type.isnull()]
 
     #if the input file is for run 2, convert it to run 1 format
-    if 'run-02' in opts.in_file:
+    if 'run-02' in opts.in_file.name:
         working_df = run2processing(working_df)
 
     #set the index to the working_df to the onset column, which will allow
@@ -59,9 +62,14 @@ if __name__ == '__main__':
 
     working_df.to_csv(opts.in_file, sep='\t', na_rep='n/a')
 
-#A function that handle the formatting differences between run 1 and run 2 events files
-#by converting run 2 event files to match the run 1 formatting
+
 def run2processing(working_df):
+    """
+    Handle formatting differences of run-2.
+
+    A function that handle the formatting differences between run 1 and run 2 events files
+    by converting run 2 event files to match the run 1 formatting
+    """
 
     #define baseline_onset as the lowest value in the onset column of the data frame
     baseline_onset = working_df.iloc[working_df["onset"].idxmin()]["onset"]
@@ -74,3 +82,7 @@ def run2processing(working_df):
 
     #return mutated dataframe
     return run2_df
+
+
+if __name__ == '__main__':
+    main()
